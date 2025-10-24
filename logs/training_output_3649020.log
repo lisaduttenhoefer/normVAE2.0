@@ -1,0 +1,418 @@
+Training set erstellt: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/train_metadataHC_0.720251024_1927.csv (1955 Patienten)
+Test set erstellt: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251024_1927.csv (2213 Patienten, davon 838 HC und 1375 andere)
+Only one CUDA device found. Using cuda:0
+
+####################################################################################################
+
+Starting Catatonia CPA training session NormativeVAE20_all_20251024_1927_HC_columnwise at 2025-10-24_21-27
+----------------------------------------------------------------------------------------------------------
+
+Using Device:        cuda:0
+Queued Epochs:       200
+Batch Size:          16
+Data Summary:        ['/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/train_metadataHC_0.720251024_1927.csv']
+MRI Data Directory:  /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+Loading Model:       False
+Output Directory:    /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927
+
+More details in log file: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/logs/2025-10-24_21-27_NormativeVAE20_all_20251024_1927_HC_columnwise_training_log_.txt
+
+####################################################################################################
+Starting normative modeling with atlas: all, epochs: 200, bootstraps: 100
+Normalization method: columnwise
+Configuration saved to /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/config.csv
+Using device: cuda
+Loading NORM control data...
+[INFO] Loading MRI data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+[INFO] Processing atlases: ['neuromorphometrics', 'lpba40', 'cobra', 'suit', 'ibsr', 'aal3', 'schaefer100', 'schaefer200', 'aparc_dk40', 'aparc_destrieux']
+[INFO] Target volume types: ['Vgm', 'G', 'T']
+[INFO] Loaded MRI data with shape: (4163, 1211)
+[INFO] Found 1194 ROI columns in MRI data
+[INFO] Processing atlas: neuromorphometrics (prefix: Neurom)
+[INFO] Found 123 columns for atlas neuromorphometrics
+[INFO] Processing atlas: lpba40 (prefix: lpba40)
+[INFO] Found 56 columns for atlas lpba40
+[INFO] Processing atlas: cobra (prefix: cobra)
+[INFO] Found 52 columns for atlas cobra
+[INFO] Processing atlas: suit (prefix: SUIT)
+[INFO] Found 28 columns for atlas suit
+[INFO] Processing atlas: ibsr (prefix: IBSR)
+[INFO] Found 32 columns for atlas ibsr
+[INFO] Processing atlas: aal3 (prefix: AAL3)
+[INFO] Found 170 columns for atlas aal3
+[INFO] Processing atlas: schaefer100 (prefix: Sch100)
+[INFO] Found 100 columns for atlas schaefer100
+[INFO] Processing atlas: schaefer200 (prefix: Sch200)
+[INFO] Found 200 columns for atlas schaefer200
+[INFO] Processing atlas: aparc_dk40 (prefix: DK40)
+[INFO] Found 274 columns for atlas aparc_dk40
+[INFO] Processing atlas: aparc_destrieux (prefix: Destrieux)
+[INFO] Found 592 columns for atlas aparc_destrieux
+[INFO] Selected 1194 feature columns total
+[INFO] Total ROI names: 1194
+[INFO] Starting COLUMN-WISE normalization per volume type...
+[INFO] Normalizing Vgm: 761 features (COLUMN-WISE)
+[INFO]   - Applying TIV normalization to Vgm
+[INFO]   - Applied COLUMN-WISE Z-score normalization
+[INFO] Normalizing G: 216 features (COLUMN-WISE)
+[INFO]   - Applied COLUMN-WISE Z-score normalization
+[INFO] Normalizing T: 217 features (COLUMN-WISE)
+[INFO]   - Applied COLUMN-WISE Z-score normalization
+[INFO] COLUMN-WISE normalization complete. Total features: 1194
+[INFO] Matching 1955 metadata entries with MRI data...
+[INFO] Successfully matched 1954/1955 subjects
+[WARNING] 1 subjects not found in MRI data
+[WARNING] Unmatched: ['sub-031461_T1w']
+[INFO] Total subjects processed: 1954
+[INFO] Total ROI features per subject: 1194
+[INFO] Data loading complete!
+Value counts of Diagnosis in annotations_norm:
+Diagnosis
+HC    1955
+Name: count, dtype: int64
+size annotations: 1955
+size subjects: 1954
+First subject name length: 29
+Number of ROIs in atlas: 1194
+[INFO] 1560 subjects in training set
+[INFO] 390 subjects in validation set
+[WARNING] 4 subjects not found in annotations:
+  - sub-031704_T1w
+  - sub-NDARINVEY033HCZ_run01_T1w
+  - sub-031705_T1w
+  - sub-NDARINVKC627BAV_run01_T1w
+                        Filename Data_Type  ... NSS_Motor NSS_Total
+0                       sub-0001     train  ...       NaN       NaN
+1                       sub-0004     train  ...       NaN       NaN
+2                       sub-0011     train  ...       NaN       NaN
+3                       sub-0013     train  ...       NaN       NaN
+4                       sub-0016     train  ...       NaN       NaN
+...                          ...       ...  ...       ...       ...
+1946           sub-NM5946_0_MPR1     valid  ...       NaN       NaN
+1947           sub-NM7365_0_MPR1     valid  ...       NaN       NaN
+1948           sub-NM8356_0_MPR1     valid  ...       NaN       NaN
+1949  sub-whiteCAT191_ses-01_T1w     valid  ...       0.0       3.0
+1950  sub-whiteCAT200_ses-01_T1w     valid  ...       1.0       9.0
+
+[1951 rows x 21 columns]
+Using atlas: ['all']
+Number of ROIs: 1194
+---------------
+Data Processing
+---------------
+Loading Data
+  Training Data:       1560 subjects loaded
+  Validation Data:      390 subjects loaded
+
+Creating Model
+--------------
+Training data shape: torch.Size([1560, 1194])
+Validation data shape: torch.Size([390, 1194])
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/miniconda3/envs/LISA_ba_env/lib/python3.11/site-packages/torch/optim/lr_scheduler.py:62: UserWarning: The verbose parameter is deprecated. Please use get_last_lr() to access the learning rate.
+  warnings.warn(
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/src/models/ContrastVAE_2D.py:132: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  self.scaler = GradScaler()
+Model Archtecture: 
+NormativeVAE_2D(
+  (encoder): Sequential(
+    (0): Linear(in_features=1194, out_features=100, bias=True)
+    (1): LeakyReLU(negative_slope=0.01)
+    (2): Dropout(p=0.1, inplace=False)
+    (3): Linear(in_features=100, out_features=100, bias=True)
+    (4): LeakyReLU(negative_slope=0.01)
+    (5): Dropout(p=0.1, inplace=False)
+    (6): Linear(in_features=100, out_features=20, bias=True)
+  )
+  (fc_mu): Linear(in_features=20, out_features=20, bias=True)
+  (fc_var): Linear(in_features=20, out_features=20, bias=True)
+  (decoder): Sequential(
+    (0): Linear(in_features=20, out_features=100, bias=True)
+    (1): LeakyReLU(negative_slope=0.01)
+    (2): Dropout(p=0.1, inplace=False)
+    (3): Linear(in_features=100, out_features=100, bias=True)
+    (4): LeakyReLU(negative_slope=0.01)
+    (5): Dropout(p=0.1, inplace=False)
+    (6): Linear(in_features=100, out_features=1194, bias=True)
+  )
+)
+
+    latent_dim:          20
+    optimizer:           Adam (
+    scheduler:           <torch.optim.lr_scheduler.ReduceLROnPlateau object at 0x2b804ac84490>
+    scaler:              <torch.cuda.amp.grad_scaler.GradScaler object at 0x2b8049c35d90>
+    recon_loss_weight:   16.6449
+    kldiv_loss_weight:   1.2
+    contr_loss_weight:   0.0
+    schedule_on_validation: True
+    scheduler_patience:  10
+    scheduler_factor:    0.5
+    learning_rate:       0.000559
+    weight_decay:        1e-05
+    dropout_prob:        0.1
+    device:              cuda
+    Total Parameters:    265,254
+    Trainable Params:    265,254
+Training baseline model before bootstrap training...
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.2060, Val Loss: 1.0058, Recon: 1.0221, KL: 0.1839
+Epoch 5/200, Train Loss: 1.0162, Val Loss: 0.9768, Recon: 1.0125, KL: 0.0037
+Epoch 10/200, Train Loss: 0.8601, Val Loss: 0.8277, Recon: 0.7841, KL: 0.0760
+Epoch 15/200, Train Loss: 0.8434, Val Loss: 0.8239, Recon: 0.7656, KL: 0.0779
+Epoch 20/200, Train Loss: 0.8152, Val Loss: 0.7955, Recon: 0.7406, KL: 0.0746
+Epoch 25/200, Train Loss: 0.7811, Val Loss: 0.7654, Recon: 0.7063, KL: 0.0747
+Epoch 30/200, Train Loss: 0.7774, Val Loss: 0.7587, Recon: 0.7030, KL: 0.0744
+Epoch 35/200, Train Loss: 0.7711, Val Loss: 0.7577, Recon: 0.6980, KL: 0.0732
+Epoch 40/200, Train Loss: 0.7770, Val Loss: 0.7551, Recon: 0.7015, KL: 0.0756
+Epoch 45/200, Train Loss: 0.7733, Val Loss: 0.7551, Recon: 0.6984, KL: 0.0749
+Epoch 50/200, Train Loss: 0.7745, Val Loss: 0.7571, Recon: 0.6983, KL: 0.0762
+Epoch 55/200, Train Loss: 0.7720, Val Loss: 0.7532, Recon: 0.6955, KL: 0.0765
+Epoch 60/200, Train Loss: 0.7687, Val Loss: 0.7552, Recon: 0.6952, KL: 0.0735
+Epoch 65/200, Train Loss: 0.7716, Val Loss: 0.7566, Recon: 0.6952, KL: 0.0764
+Epoch 70/200, Train Loss: 0.7688, Val Loss: 0.7568, Recon: 0.6943, KL: 0.0745
+Epoch 75/200, Train Loss: 0.7722, Val Loss: 0.7584, Recon: 0.6970, KL: 0.0753
+Epoch 80/200, Train Loss: 0.7708, Val Loss: 0.7556, Recon: 0.6962, KL: 0.0746
+Epoch 85/200, Train Loss: 0.7683, Val Loss: 0.7553, Recon: 0.6939, KL: 0.0744
+Epoch 90/200, Train Loss: 0.7708, Val Loss: 0.7534, Recon: 0.6962, KL: 0.0745
+Epoch 95/200, Train Loss: 0.7677, Val Loss: 0.7519, Recon: 0.6917, KL: 0.0760
+Epoch 100/200, Train Loss: 0.7670, Val Loss: 0.7550, Recon: 0.6924, KL: 0.0746
+Epoch 105/200, Train Loss: 0.7679, Val Loss: 0.7563, Recon: 0.6922, KL: 0.0756
+Epoch 110/200, Train Loss: 0.7663, Val Loss: 0.7602, Recon: 0.6920, KL: 0.0743
+Epoch 115/200, Train Loss: 0.7681, Val Loss: 0.7547, Recon: 0.6927, KL: 0.0754
+Epoch 120/200, Train Loss: 0.7683, Val Loss: 0.7568, Recon: 0.6922, KL: 0.0761
+Epoch 125/200, Train Loss: 0.7683, Val Loss: 0.7562, Recon: 0.6927, KL: 0.0756
+Epoch 130/200, Train Loss: 0.7668, Val Loss: 0.7561, Recon: 0.6923, KL: 0.0745
+Epoch 135/200, Train Loss: 0.7685, Val Loss: 0.7548, Recon: 0.6922, KL: 0.0763
+Epoch 140/200, Train Loss: 0.7697, Val Loss: 0.7537, Recon: 0.6953, KL: 0.0744
+Epoch 145/200, Train Loss: 0.7664, Val Loss: 0.7558, Recon: 0.6912, KL: 0.0752
+Epoch 150/200, Train Loss: 0.7648, Val Loss: 0.7537, Recon: 0.6906, KL: 0.0742
+Epoch 155/200, Train Loss: 0.7693, Val Loss: 0.7570, Recon: 0.6932, KL: 0.0761
+Epoch 160/200, Train Loss: 0.7670, Val Loss: 0.7578, Recon: 0.6919, KL: 0.0751
+Epoch 165/200, Train Loss: 0.7665, Val Loss: 0.7533, Recon: 0.6919, KL: 0.0746
+Epoch 170/200, Train Loss: 0.7638, Val Loss: 0.7556, Recon: 0.6898, KL: 0.0741
+Epoch 175/200, Train Loss: 0.7681, Val Loss: 0.7579, Recon: 0.6919, KL: 0.0761
+Epoch 180/200, Train Loss: 0.7667, Val Loss: 0.7574, Recon: 0.6904, KL: 0.0763
+Epoch 185/200, Train Loss: 0.7667, Val Loss: 0.7635, Recon: 0.6911, KL: 0.0755
+Epoch 190/200, Train Loss: 0.7667, Val Loss: 0.7580, Recon: 0.6904, KL: 0.0764
+Epoch 195/200, Train Loss: 0.7645, Val Loss: 0.7570, Recon: 0.6885, KL: 0.0761
+Epoch 200/200, Train Loss: 0.7628, Val Loss: 0.7579, Recon: 0.6889, KL: 0.0739
+Training bootstrap models...
+Starting bootstrap training with 100 iterations
+Training bootstrap model 1/100
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.1996, Val Loss: 1.0187, Recon: 0.9843, KL: 0.2153
+Epoch 5/200, Train Loss: 0.9809, Val Loss: 0.9739, Recon: 0.9746, KL: 0.0062
+Epoch 10/200, Train Loss: 0.8347, Val Loss: 0.8183, Recon: 0.7634, KL: 0.0712
+Epoch 15/200, Train Loss: 0.8273, Val Loss: 0.8179, Recon: 0.7553, KL: 0.0720
+Epoch 20/200, Train Loss: 0.8200, Val Loss: 0.8042, Recon: 0.7442, KL: 0.0759
+Epoch 25/200, Train Loss: 0.8031, Val Loss: 0.7960, Recon: 0.7301, KL: 0.0730
+Epoch 30/200, Train Loss: 0.7934, Val Loss: 0.7830, Recon: 0.7184, KL: 0.0749
+Epoch 35/200, Train Loss: 0.7732, Val Loss: 0.7588, Recon: 0.7016, KL: 0.0716
+Epoch 40/200, Train Loss: 0.7683, Val Loss: 0.7593, Recon: 0.6964, KL: 0.0719
+Epoch 45/200, Train Loss: 0.7654, Val Loss: 0.7569, Recon: 0.6941, KL: 0.0714
+Epoch 50/200, Train Loss: 0.7665, Val Loss: 0.7605, Recon: 0.6951, KL: 0.0714
+Epoch 55/200, Train Loss: 0.7635, Val Loss: 0.7556, Recon: 0.6923, KL: 0.0713
+Epoch 60/200, Train Loss: 0.7615, Val Loss: 0.7584, Recon: 0.6898, KL: 0.0717
+Epoch 65/200, Train Loss: 0.7645, Val Loss: 0.7607, Recon: 0.6920, KL: 0.0725
+Epoch 70/200, Train Loss: 0.7633, Val Loss: 0.7634, Recon: 0.6906, KL: 0.0728
+Epoch 75/200, Train Loss: 0.7626, Val Loss: 0.7576, Recon: 0.6916, KL: 0.0710
+Epoch 80/200, Train Loss: 0.7647, Val Loss: 0.7611, Recon: 0.6926, KL: 0.0721
+Epoch 85/200, Train Loss: 0.7607, Val Loss: 0.7548, Recon: 0.6894, KL: 0.0713
+Epoch 90/200, Train Loss: 0.7644, Val Loss: 0.7584, Recon: 0.6923, KL: 0.0720
+Epoch 95/200, Train Loss: 0.7623, Val Loss: 0.7625, Recon: 0.6904, KL: 0.0719
+Epoch 100/200, Train Loss: 0.7621, Val Loss: 0.7540, Recon: 0.6909, KL: 0.0712
+Epoch 105/200, Train Loss: 0.7615, Val Loss: 0.7591, Recon: 0.6901, KL: 0.0714
+Epoch 110/200, Train Loss: 0.7625, Val Loss: 0.7650, Recon: 0.6902, KL: 0.0722
+Epoch 115/200, Train Loss: 0.7601, Val Loss: 0.7544, Recon: 0.6885, KL: 0.0716
+Epoch 120/200, Train Loss: 0.7615, Val Loss: 0.7576, Recon: 0.6896, KL: 0.0719
+Epoch 125/200, Train Loss: 0.7652, Val Loss: 0.7628, Recon: 0.6907, KL: 0.0746
+Epoch 130/200, Train Loss: 0.7627, Val Loss: 0.7545, Recon: 0.6891, KL: 0.0736
+Epoch 135/200, Train Loss: 0.7617, Val Loss: 0.7558, Recon: 0.6891, KL: 0.0726
+Epoch 140/200, Train Loss: 0.7613, Val Loss: 0.7561, Recon: 0.6889, KL: 0.0724
+Epoch 145/200, Train Loss: 0.7611, Val Loss: 0.7585, Recon: 0.6870, KL: 0.0740
+Epoch 150/200, Train Loss: 0.7567, Val Loss: 0.7526, Recon: 0.6860, KL: 0.0707
+Epoch 155/200, Train Loss: 0.7590, Val Loss: 0.7571, Recon: 0.6881, KL: 0.0709
+Epoch 160/200, Train Loss: 0.7583, Val Loss: 0.7615, Recon: 0.6873, KL: 0.0710
+Epoch 165/200, Train Loss: 0.7612, Val Loss: 0.7563, Recon: 0.6894, KL: 0.0718
+Epoch 170/200, Train Loss: 0.7586, Val Loss: 0.7600, Recon: 0.6865, KL: 0.0721
+Epoch 175/200, Train Loss: 0.7591, Val Loss: 0.7600, Recon: 0.6868, KL: 0.0723
+Epoch 180/200, Train Loss: 0.7567, Val Loss: 0.7582, Recon: 0.6857, KL: 0.0710
+Epoch 185/200, Train Loss: 0.7575, Val Loss: 0.7574, Recon: 0.6853, KL: 0.0722
+Epoch 190/200, Train Loss: 0.7608, Val Loss: 0.7580, Recon: 0.6876, KL: 0.0732
+Epoch 195/200, Train Loss: 0.7598, Val Loss: 0.7581, Recon: 0.6884, KL: 0.0715
+Epoch 200/200, Train Loss: 0.7571, Val Loss: 0.7623, Recon: 0.6854, KL: 0.0717
+Saved model 1 to /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/models/bootstrap_model_0.pt
+Training bootstrap model 2/100
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.2198, Val Loss: 1.0170, Recon: 1.0150, KL: 0.2047
+Epoch 5/200, Train Loss: 1.0141, Val Loss: 0.9755, Recon: 1.0089, KL: 0.0052
+Epoch 10/200, Train Loss: 0.8372, Val Loss: 0.8104, Recon: 0.7655, KL: 0.0717
+Epoch 15/200, Train Loss: 0.7946, Val Loss: 0.7798, Recon: 0.7232, KL: 0.0714
+Epoch 20/200, Train Loss: 0.7807, Val Loss: 0.7620, Recon: 0.7065, KL: 0.0742
+Epoch 25/200, Train Loss: 0.7763, Val Loss: 0.7698, Recon: 0.7020, KL: 0.0744
+Epoch 30/200, Train Loss: 0.7716, Val Loss: 0.7647, Recon: 0.6968, KL: 0.0748
+Epoch 35/200, Train Loss: 0.7697, Val Loss: 0.7624, Recon: 0.6950, KL: 0.0748
+Epoch 40/200, Train Loss: 0.7675, Val Loss: 0.7505, Recon: 0.6940, KL: 0.0735
+Epoch 45/200, Train Loss: 0.7696, Val Loss: 0.7538, Recon: 0.6936, KL: 0.0760
+Epoch 50/200, Train Loss: 0.7669, Val Loss: 0.7577, Recon: 0.6917, KL: 0.0752
+Epoch 55/200, Train Loss: 0.7652, Val Loss: 0.7547, Recon: 0.6904, KL: 0.0749
+Epoch 60/200, Train Loss: 0.7648, Val Loss: 0.7537, Recon: 0.6901, KL: 0.0747
+Epoch 65/200, Train Loss: 0.7660, Val Loss: 0.7580, Recon: 0.6910, KL: 0.0750
+Epoch 70/200, Train Loss: 0.7643, Val Loss: 0.7577, Recon: 0.6885, KL: 0.0758
+Epoch 75/200, Train Loss: 0.7640, Val Loss: 0.7613, Recon: 0.6899, KL: 0.0741
+Epoch 80/200, Train Loss: 0.7652, Val Loss: 0.7575, Recon: 0.6899, KL: 0.0753
+Epoch 85/200, Train Loss: 0.7648, Val Loss: 0.7560, Recon: 0.6890, KL: 0.0758
+Epoch 90/200, Train Loss: 0.7608, Val Loss: 0.7563, Recon: 0.6866, KL: 0.0741
+Epoch 95/200, Train Loss: 0.7660, Val Loss: 0.7586, Recon: 0.6904, KL: 0.0757
+Epoch 100/200, Train Loss: 0.7653, Val Loss: 0.7551, Recon: 0.6903, KL: 0.0750
+Epoch 105/200, Train Loss: 0.7606, Val Loss: 0.7577, Recon: 0.6850, KL: 0.0756
+Epoch 110/200, Train Loss: 0.7631, Val Loss: 0.7571, Recon: 0.6882, KL: 0.0749
+Epoch 115/200, Train Loss: 0.7635, Val Loss: 0.7613, Recon: 0.6889, KL: 0.0746
+Epoch 120/200, Train Loss: 0.7609, Val Loss: 0.7566, Recon: 0.6869, KL: 0.0740
+Epoch 125/200, Train Loss: 0.7637, Val Loss: 0.7628, Recon: 0.6876, KL: 0.0761
+Epoch 130/200, Train Loss: 0.7650, Val Loss: 0.7549, Recon: 0.6882, KL: 0.0768
+Epoch 135/200, Train Loss: 0.7631, Val Loss: 0.7599, Recon: 0.6889, KL: 0.0742
+Epoch 140/200, Train Loss: 0.7608, Val Loss: 0.7548, Recon: 0.6851, KL: 0.0757
+Epoch 145/200, Train Loss: 0.7663, Val Loss: 0.7583, Recon: 0.6900, KL: 0.0763
+Epoch 150/200, Train Loss: 0.7630, Val Loss: 0.7589, Recon: 0.6862, KL: 0.0768
+Epoch 155/200, Train Loss: 0.7606, Val Loss: 0.7616, Recon: 0.6850, KL: 0.0756
+Epoch 160/200, Train Loss: 0.7593, Val Loss: 0.7565, Recon: 0.6842, KL: 0.0751
+Epoch 165/200, Train Loss: 0.7602, Val Loss: 0.7626, Recon: 0.6847, KL: 0.0756
+Epoch 170/200, Train Loss: 0.7592, Val Loss: 0.7554, Recon: 0.6871, KL: 0.0721
+Epoch 175/200, Train Loss: 0.7597, Val Loss: 0.7568, Recon: 0.6840, KL: 0.0757
+Epoch 180/200, Train Loss: 0.7616, Val Loss: 0.7605, Recon: 0.6866, KL: 0.0750
+Epoch 185/200, Train Loss: 0.7613, Val Loss: 0.7564, Recon: 0.6861, KL: 0.0753
+Epoch 190/200, Train Loss: 0.7615, Val Loss: 0.7566, Recon: 0.6865, KL: 0.0749
+Epoch 195/200, Train Loss: 0.7572, Val Loss: 0.7564, Recon: 0.6830, KL: 0.0742
+Epoch 200/200, Train Loss: 0.7601, Val Loss: 0.7531, Recon: 0.6847, KL: 0.0754
+Saved model 2 to /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/models/bootstrap_model_1.pt
+Training bootstrap model 3/100
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.2111, Val Loss: 1.0124, Recon: 1.0274, KL: 0.1837
+Epoch 5/200, Train Loss: 1.0203, Val Loss: 0.9787, Recon: 1.0166, KL: 0.0036
+Epoch 10/200, Train Loss: 0.8660, Val Loss: 0.8250, Recon: 0.7855, KL: 0.0805
+Epoch 15/200, Train Loss: 0.8402, Val Loss: 0.7931, Recon: 0.7613, KL: 0.0789
+Epoch 20/200, Train Loss: 0.8002, Val Loss: 0.7796, Recon: 0.7263, KL: 0.0739
+Epoch 25/200, Train Loss: 0.7785, Val Loss: 0.7608, Recon: 0.7055, KL: 0.0730
+Epoch 30/200, Train Loss: 0.7768, Val Loss: 0.7565, Recon: 0.7011, KL: 0.0757
+Epoch 35/200, Train Loss: 0.7763, Val Loss: 0.7576, Recon: 0.7009, KL: 0.0754
+Epoch 40/200, Train Loss: 0.7737, Val Loss: 0.7576, Recon: 0.6973, KL: 0.0764
+Epoch 45/200, Train Loss: 0.7724, Val Loss: 0.7538, Recon: 0.6967, KL: 0.0757
+Epoch 50/200, Train Loss: 0.7704, Val Loss: 0.7563, Recon: 0.6942, KL: 0.0762
+Epoch 55/200, Train Loss: 0.7708, Val Loss: 0.7535, Recon: 0.6944, KL: 0.0764
+Epoch 60/200, Train Loss: 0.7703, Val Loss: 0.7563, Recon: 0.6933, KL: 0.0770
+Epoch 65/200, Train Loss: 0.7699, Val Loss: 0.7600, Recon: 0.6940, KL: 0.0760
+Epoch 70/200, Train Loss: 0.7702, Val Loss: 0.7565, Recon: 0.6928, KL: 0.0773
+Epoch 75/200, Train Loss: 0.7690, Val Loss: 0.7614, Recon: 0.6924, KL: 0.0765
+Epoch 80/200, Train Loss: 0.7688, Val Loss: 0.7634, Recon: 0.6946, KL: 0.0741
+Epoch 85/200, Train Loss: 0.7617, Val Loss: 0.7582, Recon: 0.6895, KL: 0.0723
+Epoch 90/200, Train Loss: 0.7646, Val Loss: 0.7585, Recon: 0.6900, KL: 0.0747
+Epoch 95/200, Train Loss: 0.7645, Val Loss: 0.7607, Recon: 0.6888, KL: 0.0757
+Epoch 100/200, Train Loss: 0.7684, Val Loss: 0.7611, Recon: 0.6916, KL: 0.0767
+Epoch 105/200, Train Loss: 0.7652, Val Loss: 0.7612, Recon: 0.6900, KL: 0.0752
+Epoch 110/200, Train Loss: 0.7660, Val Loss: 0.7562, Recon: 0.6898, KL: 0.0762
+Epoch 115/200, Train Loss: 0.7637, Val Loss: 0.7600, Recon: 0.6877, KL: 0.0760
+Epoch 120/200, Train Loss: 0.7665, Val Loss: 0.7615, Recon: 0.6897, KL: 0.0768
+Epoch 125/200, Train Loss: 0.7645, Val Loss: 0.7624, Recon: 0.6905, KL: 0.0740
+Epoch 130/200, Train Loss: 0.7646, Val Loss: 0.7553, Recon: 0.6903, KL: 0.0743
+Epoch 135/200, Train Loss: 0.7656, Val Loss: 0.7566, Recon: 0.6902, KL: 0.0754
+Epoch 140/200, Train Loss: 0.7655, Val Loss: 0.7531, Recon: 0.6899, KL: 0.0756
+Epoch 145/200, Train Loss: 0.7636, Val Loss: 0.7558, Recon: 0.6875, KL: 0.0761
+Epoch 150/200, Train Loss: 0.7624, Val Loss: 0.7564, Recon: 0.6883, KL: 0.0742
+Epoch 155/200, Train Loss: 0.7645, Val Loss: 0.7581, Recon: 0.6887, KL: 0.0758
+Epoch 160/200, Train Loss: 0.7632, Val Loss: 0.7510, Recon: 0.6868, KL: 0.0764
+Epoch 165/200, Train Loss: 0.7625, Val Loss: 0.7545, Recon: 0.6879, KL: 0.0746
+Epoch 170/200, Train Loss: 0.7644, Val Loss: 0.7588, Recon: 0.6876, KL: 0.0768
+Epoch 175/200, Train Loss: 0.7616, Val Loss: 0.7602, Recon: 0.6871, KL: 0.0745
+Epoch 180/200, Train Loss: 0.7624, Val Loss: 0.7608, Recon: 0.6854, KL: 0.0770
+Epoch 185/200, Train Loss: 0.7662, Val Loss: 0.7560, Recon: 0.6891, KL: 0.0770
+Epoch 190/200, Train Loss: 0.7644, Val Loss: 0.7578, Recon: 0.6880, KL: 0.0765
+Epoch 195/200, Train Loss: 0.7624, Val Loss: 0.7543, Recon: 0.6868, KL: 0.0757
+Epoch 200/200, Train Loss: 0.7638, Val Loss: 0.7579, Recon: 0.6877, KL: 0.0761
+Saved model 3 to /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/models/bootstrap_model_2.pt
+Training bootstrap model 4/100
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.2086, Val Loss: 1.0201, Recon: 1.0118, KL: 0.1968
+Epoch 5/200, Train Loss: 1.0100, Val Loss: 0.9783, Recon: 1.0065, KL: 0.0035
+Epoch 10/200, Train Loss: 1.0051, Val Loss: 0.9747, Recon: 1.0035, KL: 0.0016
+Epoch 15/200, Train Loss: 0.8414, Val Loss: 0.8109, Recon: 0.7690, KL: 0.0723
+Epoch 20/200, Train Loss: 0.8212, Val Loss: 0.7882, Recon: 0.7498, KL: 0.0715
+Epoch 25/200, Train Loss: 0.7889, Val Loss: 0.7652, Recon: 0.7163, KL: 0.0726
+Epoch 30/200, Train Loss: 0.7830, Val Loss: 0.7619, Recon: 0.7103, KL: 0.0727
+Epoch 35/200, Train Loss: 0.7753, Val Loss: 0.7626, Recon: 0.7018, KL: 0.0735
+Epoch 40/200, Train Loss: 0.7764, Val Loss: 0.7604, Recon: 0.7034, KL: 0.0730
+Epoch 45/200, Train Loss: 0.7754, Val Loss: 0.7539, Recon: 0.7014, KL: 0.0740
+Epoch 50/200, Train Loss: 0.7749, Val Loss: 0.7512, Recon: 0.7004, KL: 0.0745
+Epoch 55/200, Train Loss: 0.7737, Val Loss: 0.7613, Recon: 0.6996, KL: 0.0741
+Epoch 60/200, Train Loss: 0.7723, Val Loss: 0.7561, Recon: 0.6991, KL: 0.0732
+Epoch 65/200, Train Loss: 0.7754, Val Loss: 0.7551, Recon: 0.7006, KL: 0.0748
+Epoch 70/200, Train Loss: 0.7731, Val Loss: 0.7597, Recon: 0.6993, KL: 0.0738
+Epoch 75/200, Train Loss: 0.7714, Val Loss: 0.7574, Recon: 0.6991, KL: 0.0724
+Epoch 80/200, Train Loss: 0.7714, Val Loss: 0.7596, Recon: 0.6980, KL: 0.0734
+Epoch 85/200, Train Loss: 0.7723, Val Loss: 0.7581, Recon: 0.6987, KL: 0.0737
+Epoch 90/200, Train Loss: 0.7730, Val Loss: 0.7619, Recon: 0.6984, KL: 0.0745
+Epoch 95/200, Train Loss: 0.7699, Val Loss: 0.7619, Recon: 0.6977, KL: 0.0722
+Epoch 100/200, Train Loss: 0.7693, Val Loss: 0.7593, Recon: 0.6967, KL: 0.0725
+Epoch 105/200, Train Loss: 0.7717, Val Loss: 0.7594, Recon: 0.6996, KL: 0.0722
+Epoch 110/200, Train Loss: 0.7705, Val Loss: 0.7508, Recon: 0.6973, KL: 0.0732
+Epoch 115/200, Train Loss: 0.7714, Val Loss: 0.7565, Recon: 0.6973, KL: 0.0742
+Epoch 120/200, Train Loss: 0.7715, Val Loss: 0.7583, Recon: 0.6974, KL: 0.0741
+Epoch 125/200, Train Loss: 0.7728, Val Loss: 0.7599, Recon: 0.6978, KL: 0.0750
+Epoch 130/200, Train Loss: 0.7690, Val Loss: 0.7619, Recon: 0.6956, KL: 0.0734
+Epoch 135/200, Train Loss: 0.7696, Val Loss: 0.7547, Recon: 0.6969, KL: 0.0726
+Epoch 140/200, Train Loss: 0.7699, Val Loss: 0.7594, Recon: 0.6970, KL: 0.0729
+Epoch 145/200, Train Loss: 0.7704, Val Loss: 0.7574, Recon: 0.6963, KL: 0.0741
+Epoch 150/200, Train Loss: 0.7704, Val Loss: 0.7540, Recon: 0.6963, KL: 0.0741
+Epoch 155/200, Train Loss: 0.7699, Val Loss: 0.7572, Recon: 0.6958, KL: 0.0741
+Epoch 160/200, Train Loss: 0.7724, Val Loss: 0.7572, Recon: 0.6981, KL: 0.0743
+Epoch 165/200, Train Loss: 0.7670, Val Loss: 0.7555, Recon: 0.6935, KL: 0.0735
+Epoch 170/200, Train Loss: 0.7696, Val Loss: 0.7555, Recon: 0.6961, KL: 0.0735
+Epoch 175/200, Train Loss: 0.7708, Val Loss: 0.7550, Recon: 0.6963, KL: 0.0745
+Epoch 180/200, Train Loss: 0.7685, Val Loss: 0.7582, Recon: 0.6945, KL: 0.0740
+Epoch 185/200, Train Loss: 0.7694, Val Loss: 0.7584, Recon: 0.6961, KL: 0.0732
+Epoch 190/200, Train Loss: 0.7702, Val Loss: 0.7566, Recon: 0.6961, KL: 0.0741
+Epoch 195/200, Train Loss: 0.7684, Val Loss: 0.7556, Recon: 0.6959, KL: 0.0725
+Epoch 200/200, Train Loss: 0.7680, Val Loss: 0.7545, Recon: 0.6949, KL: 0.0731
+Saved model 4 to /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251024_1927/models/bootstrap_model_3.pt
+Training bootstrap model 5/100
+Training data shape IM MODEL: torch.Size([1560, 1194])
+Epoch 1/200, Train Loss: 1.1457, Val Loss: 1.0053, Recon: 1.0114, KL: 0.1343
+Epoch 5/200, Train Loss: 1.0082, Val Loss: 0.9770, Recon: 1.0061, KL: 0.0021
+Epoch 10/200, Train Loss: 1.0022, Val Loss: 0.9762, Recon: 1.0018, KL: 0.0005
+Epoch 15/200, Train Loss: 1.0049, Val Loss: 0.9770, Recon: 1.0039, KL: 0.0010
+Epoch 20/200, Train Loss: 0.8447, Val Loss: 0.8052, Recon: 0.7706, KL: 0.0741
+Epoch 25/200, Train Loss: 0.8289, Val Loss: 0.8031, Recon: 0.7532, KL: 0.0758
+Epoch 30/200, Train Loss: 0.8189, Val Loss: 0.7938, Recon: 0.7448, KL: 0.0741
+Epoch 35/200, Train Loss: 0.8104, Val Loss: 0.7857, Recon: 0.7333, KL: 0.0771
+Epoch 40/200, Train Loss: 0.8070, Val Loss: 0.7820, Recon: 0.7289, KL: 0.0781
+Epoch 45/200, Train Loss: 0.8074, Val Loss: 0.7882, Recon: 0.7299, KL: 0.0775
+Epoch 50/200, Train Loss: 0.7961, Val Loss: 0.7793, Recon: 0.7200, KL: 0.0761
+Epoch 55/200, Train Loss: 0.7835, Val Loss: 0.7603, Recon: 0.7082, KL: 0.0754
+Epoch 60/200, Train Loss: 0.7759, Val Loss: 0.7538, Recon: 0.7035, KL: 0.0724
+Epoch 65/200, Train Loss: 0.7771, Val Loss: 0.7577, Recon: 0.7046, KL: 0.0725
+Epoch 70/200, Train Loss: 0.7764, Val Loss: 0.7614, Recon: 0.7017, KL: 0.0747
+Epoch 75/200, Train Loss: 0.7735, Val Loss: 0.7581, Recon: 0.7008, KL: 0.0726
+Epoch 80/200, Train Loss: 0.7753, Val Loss: 0.7560, Recon: 0.6996, KL: 0.0757
+Epoch 85/200, Train Loss: 0.7752, Val Loss: 0.7593, Recon: 0.6989, KL: 0.0763
+Epoch 90/200, Train Loss: 0.7726, Val Loss: 0.7569, Recon: 0.6972, KL: 0.0754
+Epoch 95/200, Train Loss: 0.7720, Val Loss: 0.7537, Recon: 0.6996, KL: 0.0724
+Epoch 100/200, Train Loss: 0.7711, Val Loss: 0.7555, Recon: 0.6986, KL: 0.0725
+Epoch 105/200, Train Loss: 0.7741, Val Loss: 0.7583, Recon: 0.6984, KL: 0.0757
+Epoch 110/200, Train Loss: 0.7701, Val Loss: 0.7531, Recon: 0.6955, KL: 0.0746
+Epoch 115/200, Train Loss: 0.7697, Val Loss: 0.7596, Recon: 0.6964, KL: 0.0732
+Epoch 120/200, Train Loss: 0.7677, Val Loss: 0.7569, Recon: 0.6964, KL: 0.0714
+Epoch 125/200, Train Loss: 0.7691, Val Loss: 0.7584, Recon: 0.6952, KL: 0.0739
+Epoch 130/200, Train Loss: 0.7697, Val Loss: 0.7554, Recon: 0.6953, KL: 0.0744
+Epoch 135/200, Train Loss: 0.7728, Val Loss: 0.7572, Recon: 0.6958, KL: 0.0770
+Epoch 140/200, Train Loss: 0.7679, Val Loss: 0.7572, Recon: 0.6949, KL: 0.0729
+Epoch 145/200, Train Loss: 0.7680, Val Loss: 0.7577, Recon: 0.6945, KL: 0.0734
+Epoch 150/200, Train Loss: 0.7706, Val Loss: 0.7539, Recon: 0.6962, KL: 0.0744
+Epoch 155/200, Train Loss: 0.7697, Val Loss: 0.7555, Recon: 0.6949, KL: 0.0748
+Epoch 160/200, Train Loss: 0.7696, Val Loss: 0.7574, Recon: 0.6939, KL: 0.0758
+Epoch 165/200, Train Loss: 0.7707, Val Loss: 0.7508, Recon: 0.6951, KL: 0.0757
+Epoch 170/200, Train Loss: 0.7696, Val Loss: 0.7543, Recon: 0.6944, KL: 0.0752
+Epoch 175/200, Train Loss: 0.7693, Val Loss: 0.7561, Recon: 0.6935, KL: 0.0759
+Epoch 180/200, Train Loss: 0.7668, Val Loss: 0.7543, Recon: 0.6917, KL: 0.0751
+Epoch 185/200, Train Loss: 0.7685, Val Loss: 0.7558, Recon: 0.6941, KL: 0.0744
+Epoch 190/200, Train Loss: 0.7666, Val Loss: 0.7573, Recon: 0.6930, KL: 0.0736
+Epoch 195/200, Train Loss: 0.7690, Val Loss: 0.7574, Recon: 0.6939, KL: 0.0751
+Epoch 200/200, Train Loss: 0.7705, Val Loss: 0.7565, Recon: 0.6946, KL: 0.0758

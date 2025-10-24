@@ -229,48 +229,259 @@ class CustomDataset_2D():
         return measurements, labels, names
 
 """
-New version of load_mri_data_2D for CSV-based MRI data
-Compatible with the new CAT12_results_final.csv format
+New load_mri_data_2D for CSV-based data with:
+- TIV normalization for volume data
+- Original normalize_and_scale_og() logic (Log + Row-wise Z-score)
+- Compatible with CAT12_results_final.csv format
 """
+
 import pandas as pd
 import numpy as np
 import os
 import re
 from typing import List, Tuple
-from sklearn.preprocessing import StandardScaler
+
+
+def normalize_and_scale_og_csv(df: pd.DataFrame, volume_columns: List[str]) -> pd.DataFrame:
+    """
+    Apply the original normalization from the HDF5 version:
+    1. Log transformation: ln((10000*value)/sum_values + 1)
+    2. Row-wise Z-standardization per volume type
+    
+    Args:
+        df: DataFrame with Rows=ROIs, Columns=Patients (transposed from CSV)
+        volume_columns: List of column names grouped by volume type
+    
+    Returns:
+        Normalized DataFrame
+    """
+    df_copy = df.copy()
+    
+    # Step 1: Log transformation
+    column_sums = df_copy.sum()
+    transformed_df = np.log((10000 * df_copy) / column_sums + 1)
+    
+    norm_copy = transformed_df.copy()
+    
+    # Step 2: Extract volume types from column names
+    # For CSV: columns are like "Vgm_Neurom_Region", extract "Vgm"
+    volume_types = {}
+    for col in norm_copy.columns:
+        # Extract volume type prefix (Vgm, Vwm, Vcsf, G, T)
+        vtype = col.split('_')[0]
+        if vtype not in volume_types:
+            volume_types[vtype] = []
+        volume_types[vtype].append(col)
+    
+    # Step 3: Z-scale each volume type separately (row-wise, i.e. per ROI)
+    for vtype, cols in volume_types.items():
+        if not cols:
+            continue
+            
+        # Scale the selected columns per row (per ROI across patients)
+        scaled = norm_copy[cols].apply(
+            lambda row: (row - row.mean()) / row.std() if row.std() > 0 else pd.Series(0.0, index=row.index),
+            axis=1  # Row-wise (across patients for each ROI)
+        )
+        
+        norm_copy.loc[:, cols] = scaled
+    
+    return norm_copy
+
+"""
+Add these TWO normalization functions to module/data_processing_hc.py
+
+Replace the current normalize_volume_types_separately with both versions.
+"""
+
+import pandas as pd
+import numpy as np
+from typing import List
+
+
+def normalize_volume_types_separately_rowwise(
+    mri_data: pd.DataFrame, 
+    selected_columns: List[str], 
+    use_tiv: bool = True
+) -> pd.DataFrame:
+    """
+    ROW-WISE normalization (Pinaya approach).
+    
+    Normalizes each volume type separately:
+    1. TIV normalization (only for Vgm, Vwm, Vcsf)
+    2. Log transformation (per volume type)
+    3. Row-wise Z-score (per ROI across patients)
+    
+    This preserves RELATIVE patterns within each brain.
+    """
+    print("[INFO] Starting ROW-WISE normalization per volume type...")
+    
+    normalized_data = pd.DataFrame(index=mri_data.index)
+    
+    volume_types = {
+        'Vgm': [col for col in selected_columns if col.startswith('Vgm_')],
+        'Vwm': [col for col in selected_columns if col.startswith('Vwm_')],
+        'Vcsf': [col for col in selected_columns if col.startswith('Vcsf_')],
+        'G': [col for col in selected_columns if col.startswith('G_')],
+        'T': [col for col in selected_columns if col.startswith('T_')]
+    }
+    
+    for vtype, cols in volume_types.items():
+        if not cols:
+            continue
+            
+        print(f"[INFO] Normalizing {vtype}: {len(cols)} features (ROW-WISE)")
+        
+        # 1. TIV NORMALIZATION (only for Vgm, Vwm, Vcsf)
+        if vtype in ['Vgm', 'Vwm', 'Vcsf'] and use_tiv and 'TIV' in mri_data.columns:
+            print(f"[INFO]   - Applying TIV normalization to {vtype}")
+            vtype_data = mri_data[cols].div(mri_data['TIV'], axis=0)
+        else:
+            vtype_data = mri_data[cols].copy()
+        
+        # 2. TRANSPOSE (ROIs x Patients)
+        vtype_transposed = vtype_data.T
+        
+        # 3. LOG TRANSFORMATION (per volume type)
+        column_sums = vtype_transposed.sum(axis=0)
+        log_transformed = np.log((10000 * vtype_transposed) / column_sums + 1)
+        print(f"[INFO]   - Applied log transformation")
+        
+        # 4. ROW-WISE Z-SCORE (per ROI across patients)
+        z_scored = log_transformed.apply(
+            lambda row: (row - row.mean()) / row.std() if row.std() > 0 else pd.Series(0.0, index=row.index),
+            axis=1
+        )
+        print(f"[INFO]   - Applied ROW-WISE Z-score normalization")
+        
+        # 5. TRANSPOSE BACK (Patients x ROIs)
+        normalized_vtype = z_scored.T
+        
+        normalized_data = pd.concat([normalized_data, normalized_vtype], axis=1)
+    
+    print(f"[INFO] ROW-WISE normalization complete. Total features: {normalized_data.shape[1]}")
+    
+    return normalized_data
+
+
+def normalize_volume_types_separately_columnwise(
+    mri_data: pd.DataFrame, 
+    selected_columns: List[str], 
+    use_tiv: bool = True
+) -> pd.DataFrame:
+    """
+    COLUMN-WISE normalization (Classical neuroimaging approach).
+    
+    Normalizes each volume type separately:
+    1. TIV normalization (only for Vgm, Vwm, Vcsf)
+    2. Column-wise Z-score (per feature across patients)
+    
+    This preserves ABSOLUTE differences between patients.
+    No log transformation needed as each feature has its own scale.
+    """
+    print("[INFO] Starting COLUMN-WISE normalization per volume type...")
+    
+    normalized_data = pd.DataFrame(index=mri_data.index)
+    
+    volume_types = {
+        'Vgm': [col for col in selected_columns if col.startswith('Vgm_')],
+        'Vwm': [col for col in selected_columns if col.startswith('Vwm_')],
+        'Vcsf': [col for col in selected_columns if col.startswith('Vcsf_')],
+        'G': [col for col in selected_columns if col.startswith('G_')],
+        'T': [col for col in selected_columns if col.startswith('T_')]
+    }
+    
+    for vtype, cols in volume_types.items():
+        if not cols:
+            continue
+            
+        print(f"[INFO] Normalizing {vtype}: {len(cols)} features (COLUMN-WISE)")
+        
+        # 1. TIV NORMALIZATION (only for Vgm, Vwm, Vcsf)
+        if vtype in ['Vgm', 'Vwm', 'Vcsf'] and use_tiv and 'TIV' in mri_data.columns:
+            print(f"[INFO]   - Applying TIV normalization to {vtype}")
+            vtype_data = mri_data[cols].div(mri_data['TIV'], axis=0)
+        else:
+            vtype_data = mri_data[cols].copy()
+        
+        # 2. COLUMN-WISE Z-SCORE (per feature across patients)
+        # Calculate mean and std for each feature across all patients
+        means = vtype_data.mean(axis=0)  # Mean per column (feature)
+        stds = vtype_data.std(axis=0)    # Std per column (feature)
+        
+        # Handle features with zero std (constant values)
+        stds = stds.replace(0, 1)
+        
+        normalized_vtype = (vtype_data - means) / stds
+        print(f"[INFO]   - Applied COLUMN-WISE Z-score normalization")
+        
+        normalized_data = pd.concat([normalized_data, normalized_vtype], axis=1)
+    
+    print(f"[INFO] COLUMN-WISE normalization complete. Total features: {normalized_data.shape[1]}")
+    
+    return normalized_data
+
+
+def normalize_volume_types_separately(
+    mri_data: pd.DataFrame, 
+    selected_columns: List[str], 
+    use_tiv: bool = True,
+    method: str = "rowwise"
+) -> pd.DataFrame:
+    """
+    Wrapper function that calls either row-wise or column-wise normalization.
+    
+    Args:
+        mri_data: DataFrame with all MRI measurements
+        selected_columns: List of column names to normalize
+        use_tiv: Whether to apply TIV normalization to volume data
+        method: "rowwise" (Pinaya approach) or "columnwise" (classical approach)
+        
+    Returns:
+        DataFrame with normalized data
+    """
+    if method == "rowwise":
+        return normalize_volume_types_separately_rowwise(mri_data, selected_columns, use_tiv)
+    elif method == "columnwise":
+        return normalize_volume_types_separately_columnwise(mri_data, selected_columns, use_tiv)
+    else:
+        raise ValueError(f"Unknown normalization method: {method}. Use 'rowwise' or 'columnwise'")
 
 
 def load_mri_data_2D(
-    data_path: str,  # Path to the single CSV file
+    data_path: str,
     atlas_name: List[str] = None,
-    csv_paths: list[str] = None,  # Metadata CSV paths
+    csv_paths: list[str] = None,
     annotations: pd.DataFrame = None,
     diagnoses: List[str] = None,
     covars: List[str] = [],
-    hdf5: bool = True,  # Kept for compatibility, but ignored
+    hdf5: bool = True,
     train_or_test: str = "train",
     save: bool = None,
     volume_type = None,
-    valid_volume_types: List[str] = ["Vgm", "Vwm", "Vcsf"],
+    valid_volume_types: List[str] = ["Vgm", "Vwm", "Vcsf", "G", "T"],
+    use_tiv_normalization: bool = True,
+    normalization_method: str = "rowwise",  # ← NEW PARAMETER!
 ) -> Tuple:
     """
-    Load MRI data from a single CSV file containing all subjects and ROIs.
+    Load MRI data from CSV with proper separate normalization per volume type.
     
-    New CSV format:
-    - Columns: Filename, Dataset, QC values, then V[gm/wm/csf]_<ATLAS>_<REGION> and [T/G]_<ATLAS>_<REGION>
-    - Each row is one subject
+    Key difference from old version:
+    - Each volume type (Vgm, G, T) is normalized separately from the start
+    - This prevents mixing of different measurement scales
     
     Args:
         data_path: Path to CAT12_results_final.csv
-        atlas_name: List of atlas names or ["all"] for all atlases
+        atlas_name: List of atlas names or ["all"]
         csv_paths: Paths to metadata CSV files
-        volume_type: Volume types to use (e.g., ["Vgm", "Vwm"] or "all")
+        volume_type: Volume types to use
         valid_volume_types: All valid volume type prefixes
+        use_tiv_normalization: Whether to apply TIV normalization to volume data
         
     Returns:
         subjects: List of subject dictionaries
         data_overview: DataFrame with metadata
-        all_roi_names: List of all ROI feature names
+        all_roi_names: List of ROI feature names
     """
     
     print(f"[INFO] Loading MRI data from: {data_path}")
@@ -278,7 +489,6 @@ def load_mri_data_2D(
     # ============================================================
     # 1. HANDLE ATLAS NAMES
     # ============================================================
-    # Map atlas names to their prefixes in the CSV
     atlas_mapping = {
         "neuromorphometrics": "Neurom",
         "lpba40": "lpba40",
@@ -288,17 +498,15 @@ def load_mri_data_2D(
         "aal3": "AAL3",
         "schaefer100": "Sch100",
         "schaefer200": "Sch200",
-        "aparc_dk40": "DK40",       # For thickness and gyrification
-        "aparc_destrieux": "Destrieux"  # For thickness and gyrification
+        "aparc_dk40": "DK40",
+        "aparc_destrieux": "Destrieux"
     }
     
     all_available_atlases = list(atlas_mapping.keys())
     
-    # Ensure atlas_name is a list
     if not isinstance(atlas_name, list):
         atlas_name = [atlas_name]
     
-    # Handle "all" case
     if len(atlas_name) == 1 and atlas_name[0] == "all":
         atlas_name = all_available_atlases
     
@@ -328,7 +536,6 @@ def load_mri_data_2D(
             assert os.path.isfile(csv_path), f"[ERROR] CSV file '{csv_path}' not found"
         assert annotations is None, "[ERROR] Both CSV and annotations provided"
         
-        # Combine multiple metadata CSVs if provided
         dfs = []
         for csv_path in csv_paths:
             df = pd.read_csv(csv_path)
@@ -336,10 +543,9 @@ def load_mri_data_2D(
         data_overview = pd.concat(dfs, ignore_index=True)
         
     elif annotations is not None:
-        assert isinstance(annotations, pd.DataFrame), "[ERROR] Annotations must be a pandas DataFrame"
+        assert isinstance(annotations, pd.DataFrame), "[ERROR] Annotations must be DataFrame"
         assert csv_paths is None, "[ERROR] Both CSV and annotations provided"
         data_overview = annotations
-        print("[INFO] Annotations loaded successfully.")
     else:
         raise ValueError("[ERROR] No CSV path or annotations provided!")
     
@@ -352,7 +558,6 @@ def load_mri_data_2D(
     data_overview = data_overview[data_overview["Diagnosis"].isin(diagnoses)]
     data_overview = data_overview.reset_index(drop=True)
     
-    # Handling covariates and diagnoses lists
     covars = [covars] if not isinstance(covars, list) else covars
     diagnoses = [diagnoses] if not isinstance(diagnoses, list) else diagnoses
     
@@ -363,7 +568,7 @@ def load_mri_data_2D(
     variables = ["Diagnosis"] + covars
     for var in variables:
         if var not in data_overview.columns:
-            raise ValueError(f"[ERROR] Column '{var}' not found in CSV file or annotations")
+            raise ValueError(f"[ERROR] Column '{var}' not found in metadata")
         one_hot_labels[var] = pd.get_dummies(data_overview[var], dtype=float)
     
     # ============================================================
@@ -376,25 +581,21 @@ def load_mri_data_2D(
     print(f"[INFO] Loaded MRI data with shape: {mri_data.shape}")
     
     # ============================================================
-    # 7. SELECT RELEVANT COLUMNS BASED ON ATLAS AND VOLUME TYPE
+    # 7. SELECT RELEVANT COLUMNS
     # ============================================================
-    subjects_dict = {}
-    all_roi_names = []
-    
-    # QC columns to skip (everything before the actual ROI data)
     qc_columns = ['Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV', 
                   'GM_vol', 'WM_vol', 'CSF_vol', 'WMH_vol', 
                   'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
                   'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global']
     
-    # Get all ROI columns (everything after QC columns)
     all_columns = mri_data.columns.tolist()
     roi_columns = [col for col in all_columns if col not in qc_columns]
     
     print(f"[INFO] Found {len(roi_columns)} ROI columns in MRI data")
     
-    # Filter columns by atlas and volume type
-    selected_columns = ['Filename']  # Always need Filename for matching
+    # Select columns by atlas and volume type
+    selected_columns = []
+    all_roi_names = []
     
     for atlas in atlas_name:
         atlas_prefix = atlas_mapping.get(atlas)
@@ -404,111 +605,80 @@ def load_mri_data_2D(
         
         print(f"[INFO] Processing atlas: {atlas} (prefix: {atlas_prefix})")
         
-        # Find columns for this atlas
         atlas_columns = []
         
         for col in roi_columns:
-            # Check if column matches any target volume type AND the atlas
+            # Check volume types
             for vt in target_volume_types:
                 if col.startswith(f"{vt}_") and f"_{atlas_prefix}_" in col:
                     atlas_columns.append(col)
                     break
             
-            # Also check for Gyrification and Thickness values (G_ and T_)
+            # Check thickness and gyrification
             if col.startswith("G_") or col.startswith("T_"):
                 if f"_{atlas_prefix}_" in col:
                     atlas_columns.append(col)
         
         if not atlas_columns:
-            print(f"[WARNING] No columns found for atlas {atlas} with volume types {target_volume_types}")
+            print(f"[WARNING] No columns found for atlas {atlas}")
             continue
         
         print(f"[INFO] Found {len(atlas_columns)} columns for atlas {atlas}")
         selected_columns.extend(atlas_columns)
-        
-        # Add to ROI names list
-        # Create standardized names: atlas_region_type
-        for col in atlas_columns:
-            # Parse column name: Vgm_Neurom_RegionName -> neuromorphometrics_RegionName_Vgm
-            parts = col.split('_', 2)  # Split into max 3 parts
-            if len(parts) >= 3:
-                type_prefix = parts[0]  # Vgm, Vwm, Vcsf, G, T
-                atlas_short = parts[1]   # Neurom, Cobra, etc.
-                region = parts[2]        # RegionName
-                
-                standardized_name = f"{atlas}_{region}_{type_prefix}"
-                all_roi_names.append(standardized_name)
-            else:
-                # Fallback for unexpected formats
-                all_roi_names.append(f"{atlas}_{col}")
+        all_roi_names.extend(atlas_columns)
     
-    # Remove duplicates from selected_columns (keep Filename only once)
-    selected_columns = ['Filename'] + list(dict.fromkeys([col for col in selected_columns if col != 'Filename']))
+    # Remove duplicates
+    selected_columns = list(dict.fromkeys(selected_columns))
+    all_roi_names = list(dict.fromkeys(all_roi_names))
     
-    print(f"[INFO] Selected {len(selected_columns)-1} feature columns total")
+    print(f"[INFO] Selected {len(selected_columns)} feature columns total")
     print(f"[INFO] Total ROI names: {len(all_roi_names)}")
     
     # ============================================================
-    # 8. FILTER MRI DATA TO SELECTED COLUMNS
+    # 8. NORMALIZE EACH VOLUME TYPE SEPARATELY
     # ============================================================
-    mri_data_filtered = mri_data[selected_columns].copy()
-    
-    # ============================================================
-    # 9. NORMALIZE AND SCALE DATA
-    # ============================================================
-    # Separate Filename and feature columns
-    filenames = mri_data_filtered['Filename']
-    feature_columns = [col for col in selected_columns if col != 'Filename']
-    features = mri_data_filtered[feature_columns]
-    
-    # Apply StandardScaler
-    scaler = StandardScaler()
-    features_scaled = scaler.fit_transform(features)
-    
-    # Create normalized dataframe
-    mri_data_normalized = pd.DataFrame(
-        features_scaled, 
-        columns=feature_columns,
-        index=mri_data_filtered.index
+    mri_data_normalized = normalize_volume_types_separately(
+        mri_data=mri_data,
+        selected_columns=selected_columns,
+        use_tiv=use_tiv_normalization,
+        method=normalization_method  # ← NEW PARAMETER!
     )
-    mri_data_normalized.insert(0, 'Filename', filenames)
     
-    print("[INFO] Data normalized and scaled")
+    # Add Filename column back
+    mri_data_normalized.insert(0, 'Filename', mri_data['Filename'])
     
     # ============================================================
-    # 10. MATCH METADATA WITH MRI DATA AND CREATE SUBJECTS
+    # 9. MATCH METADATA WITH MRI DATA AND CREATE SUBJECTS
     # ============================================================
     print(f"[INFO] Matching {len(data_overview)} metadata entries with MRI data...")
     
-    # Create a mapping for quick lookup (handle both with and without 'sub-' prefix)
-    mri_lookup = {}
-    for idx, row in mri_data_normalized.iterrows():
-        filename = row['Filename']
-        # Store with the original filename
-        mri_lookup[filename] = idx
-        # Also store without 'sub-' prefix if it exists
-        if filename.startswith('sub-'):
-            mri_lookup[filename[4:]] = idx
-        else:
-            # Also try with 'sub-' prefix
-            mri_lookup[f"sub-{filename}"] = idx
+    # Create filename lookup (handle sub- prefix)
+    mri_filenames = set(mri_data_normalized['Filename'])
     
+    subjects_dict = {}
     matched_count = 0
     unmatched_files = []
     
     for index, row in data_overview.iterrows():
-        # Clean filename (remove file extension if present)
+        # Clean filename
         file_name = re.sub(r"\.[^.]+$", "", row["Filename"])
         
-        # Try to find match in MRI data
-        mri_idx = mri_lookup.get(file_name)
+        # Try to find match (with and without 'sub-' prefix)
+        matched_filename = None
         
-        if mri_idx is None:
+        if file_name in mri_filenames:
+            matched_filename = file_name
+        elif f"sub-{file_name}" in mri_filenames:
+            matched_filename = f"sub-{file_name}"
+        elif file_name.startswith('sub-') and file_name[4:] in mri_filenames:
+            matched_filename = file_name[4:]
+        
+        if matched_filename is None:
             unmatched_files.append(file_name)
             continue
         
         # Extract measurements for this subject
-        measurements = mri_data_normalized.iloc[mri_idx][feature_columns].values.astype(np.float32).tolist()
+        measurements = mri_data_normalized[mri_data_normalized['Filename'] == matched_filename][selected_columns].values.flatten().astype(np.float32).tolist()
         
         # Create subject dictionary
         subjects_dict[file_name] = {
@@ -523,17 +693,17 @@ def load_mri_data_2D(
     print(f"[INFO] Successfully matched {matched_count}/{len(data_overview)} subjects")
     
     if unmatched_files:
-        print(f"[WARNING] {len(unmatched_files)} subjects from metadata not found in MRI data")
+        print(f"[WARNING] {len(unmatched_files)} subjects not found in MRI data")
         if len(unmatched_files) <= 10:
-            print(f"[WARNING] Unmatched files: {unmatched_files}")
+            print(f"[WARNING] Unmatched: {unmatched_files}")
         else:
-            print(f"[WARNING] First 10 unmatched files: {unmatched_files[:10]}")
+            print(f"[WARNING] First 10 unmatched: {unmatched_files[:10]}")
     
     # ============================================================
-    # 11. FINAL OUTPUT
+    # 10. FINAL OUTPUT
     # ============================================================
     if not subjects_dict:
-        raise ValueError("[ERROR] No subjects were successfully matched!")
+        raise ValueError("[ERROR] No subjects matched!")
     
     subjects = list(subjects_dict.values())
     
@@ -542,6 +712,7 @@ def load_mri_data_2D(
     print("[INFO] Data loading complete!")
     
     return subjects, data_overview, all_roi_names
+
 
 def process_subjects(subjects: List[tio.Subject], batch_size: int, shuffle_data: bool) -> DataLoader:
     #produces DataLoader object which is needed as input for the model
