@@ -36,7 +36,7 @@ from utils.config_utils_model import Config_2D
 
 from module.data_processing_hc import (
     load_checkpoint_model, 
-    load_mri_data_2D,
+    load_mri_data_2D_prenormalized,
     process_subjects, 
     train_val_split_annotations,
     train_val_split_subjects
@@ -187,38 +187,37 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_and_print("Loading NORM control data...")
     
     # ========== MODIFIED: Pass normalization_method parameter ==========
-    subjects_norm, annotations_norm, roi_names = load_mri_data_2D(
-        csv_paths=config.TRAIN_CSV,
-        data_path=config.MRI_DATA_PATH,
-        atlas_name=config.ATLAS_NAME,
-        diagnoses=[norm_diagnosis],
-        hdf5=True,
-        train_or_test="train",
-        save=False,
-        volume_type=config.VOLUME_TYPE,
-        valid_volume_types=config.VALID_VOLUME_TYPES,
-        use_tiv_normalization=True,
-        normalization_method=normalization_method  # ← NEW PARAMETER!
+    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC.csv"
+
+    subjects_train, train_overview, roi_names_train = load_mri_data_2D_prenormalized(
+        normalized_csv_path=NORMALIZED_CSV,
+        csv_paths=[TRAIN_CSV],
+        diagnoses=["HC"]
     )
-   
-    log_and_print("Value counts of Diagnosis in annotations_norm:")
-    log_and_print(annotations_norm['Diagnosis'].value_counts())
-    log_and_print(f"size annotations: {len(annotations_norm)}")
-    log_and_print(f"size subjects: {len(subjects_norm)}")
-    print(f"First subject name length: {len(subjects_norm[0]['name'])}")
     
-    len_atlas = len(subjects_norm[0]["measurements"])
+
+    train_data_debug = extract_measurements(subjects_train)
+    print(f"[DEBUG] Data shape: {train_data_debug.shape}")
+    print(f"[DEBUG] Data min: {train_data_debug.min()}")
+    print(f"[DEBUG] Data max: {train_data_debug.max()}")
+    print(f"[DEBUG] Data mean: {train_data_debug.mean()}")
+    print(f"[DEBUG] Data std: {train_data_debug.std()}")
+    print(f"[DEBUG] Has NaN: {torch.isnan(train_data_debug).any()}")
+    print(f"[DEBUG] Has Inf: {torch.isinf(train_data_debug).any()}")
+    print(f"[DEBUG] Sample values: {train_data_debug[0, :10]}")
+
+    len_atlas = len(roi_names_train)
     log_and_print(f"Number of ROIs in atlas: {len_atlas}")
 
     # Split norm controls metadata into train and validation
     train_annotations_norm, valid_annotations_norm = train_val_split_annotations(
-        annotations=annotations_norm, 
+        annotations=train_overview, 
         diagnoses=norm_diagnosis
     )
     
     # Split the feature maps accordingly
     train_subjects_norm, valid_subjects_norm = train_val_split_subjects(
-        subjects=subjects_norm, 
+        subjects=subjects_train, 
         train_ann=train_annotations_norm, 
         val_ann=valid_annotations_norm
     )

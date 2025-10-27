@@ -547,7 +547,272 @@ def calculate_deviations(normative_models, data_tensor, norm_diagnosis, annotati
 
     return results_df
 
+"""
+PATCH 2: Add these NEW FUNCTIONS to your testing script
+Insert BEFORE def main()
+"""
+"""
+PATCH 7: Add to dev_scores_utils.py
 
+Function to create errorbar plots for ALL deviation metrics
+"""
+
+def plot_deviation_distributions_all_metrics(results_df, save_dir, norm_diagnosis='HC', custom_colors=None):
+    """
+    Create errorbar plots for ALL deviation metrics in results_df.
+    
+    Creates plots for:
+    - deviation_score (bootstrap)
+    - deviation_recon
+    - deviation_kl
+    - deviation_latent_aguila
+    - deviation_combined
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    
+    # Default colors
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A",
+            "SCHZ": "#3E885B",
+            "MDD": "#BEDCFE",
+            "CTT": "#2F4B26",
+            "CTT-SCHZ": "#A67DB8",
+            "CTT-MDD": "#160C28"
+        }
+    
+    # Find all deviation columns
+    deviation_columns = [col for col in results_df.columns if col.startswith('deviation_')]
+    
+    # Nice labels
+    label_map = {
+        'deviation_score': 'Bootstrap Deviation',
+        'deviation_recon': 'Reconstruction Error (MSE)',
+        'deviation_kl': 'KL Divergence',
+        'deviation_latent_aguila': 'Latent Deviation (Aguila)',
+        'deviation_combined': 'Combined Deviation'
+    }
+    
+    for dev_col in deviation_columns:
+        # Calculate means and SEMs per diagnosis
+        summary = results_df.groupby('Diagnosis')[dev_col].agg(['mean', 'sem', 'count'])
+        summary = summary.reset_index()
+        
+        # Sort: HC first, then others
+        if norm_diagnosis in summary['Diagnosis'].values:
+            hc_row = summary[summary['Diagnosis'] == norm_diagnosis]
+            other_rows = summary[summary['Diagnosis'] != norm_diagnosis].sort_values('mean', ascending=False)
+            summary = pd.concat([hc_row, other_rows])
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        x_pos = np.arange(len(summary))
+        
+        # Create bars with error bars
+        bars = ax.bar(x_pos, summary['mean'], 
+                     yerr=summary['sem'],
+                     capsize=5,
+                     alpha=0.8,
+                     color=[custom_colors.get(diag, '#888888') for diag in summary['Diagnosis']],
+                     edgecolor='black',
+                     linewidth=1.5)
+        
+        # Labels
+        ax.set_xlabel('Diagnosis', fontsize=14, fontweight='bold')
+        ylabel = label_map.get(dev_col, dev_col.replace('_', ' ').title())
+        ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
+        ax.set_title(f'{ylabel} by Diagnosis', fontsize=16, fontweight='bold', pad=20)
+        
+        # X-axis
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels(summary['Diagnosis'], fontsize=12, fontweight='bold')
+        
+        # Grid
+        ax.yaxis.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        
+        # Add sample sizes
+        for i, (idx, row) in enumerate(summary.iterrows()):
+            ax.text(i, row['mean'] + row['sem'], f"n={int(row['count'])}", 
+                   ha='center', va='bottom', fontsize=9)
+        
+        plt.tight_layout()
+        
+        # Save
+        metric_name = dev_col.replace('deviation_', '')
+        filename = f"{metric_name}_errorbar_ctt_combined.png"
+        plt.savefig(f"{save_dir}/figures/distributions/{filename}", 
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Created errorbar plot: {filename}")
+# ==================== NEW DEVIATION SCORE FUNCTIONS ====================
+
+def calculate_reconstruction_deviation(model, data, device='cuda'):
+    """
+    D_MSE - Reconstruction-based deviation (Pinaya method)
+    """
+    model.eval()
+    with torch.no_grad():
+        data_tensor = torch.FloatTensor(data).to(device)
+        reconstructed, _, _ = model(data_tensor)
+        mse = torch.mean((data_tensor - reconstructed) ** 2, dim=1)
+    return mse.cpu().numpy()
+
+
+def calculate_kl_divergence_deviation(model, data, device='cuda'):
+    """
+    D_KL - KL Divergence as deviation metric
+    """
+    model.eval()
+    with torch.no_grad():
+        data_tensor = torch.FloatTensor(data).to(device)
+        _, mu, logvar = model(data_tensor)
+        kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)
+    return kl_div.cpu().numpy()
+
+
+def calculate_latent_deviation_aguila(model, data, hc_latent_stats, device='cuda'):
+    """
+    D_L - Latent-based deviation (Aguila et al. 2022)
+    
+    D_L = (1/K) * Σ |μ_kj - μ̄_k| / √(σ²_k + σ²_kj)
+    """
+    model.eval()
+    with torch.no_grad():
+        data_tensor = torch.FloatTensor(data).to(device)
+        _, mu, logvar = model(data_tensor)
+        
+        sigma_kj = torch.exp(0.5 * logvar)
+        hc_mean = torch.FloatTensor(hc_latent_stats['mean']).to(device)
+        hc_std = torch.FloatTensor(hc_latent_stats['std']).to(device)
+        
+        numerator = torch.abs(mu - hc_mean)
+        denominator = torch.sqrt(hc_std**2 + sigma_kj**2)
+        per_dim_deviations = numerator / denominator
+        deviation_scores = torch.mean(per_dim_deviations, dim=1)
+        
+    return deviation_scores.cpu().numpy(), per_dim_deviations.cpu().numpy()
+
+
+def calculate_combined_deviation(recon_dev, kl_dev, alpha=0.7, beta=0.3):
+    """
+    D_combined - Weighted combination of reconstruction and KL
+    """
+    recon_norm = (recon_dev - recon_dev.min()) / (recon_dev.max() - recon_dev.min() + 1e-8)
+    kl_norm = (kl_dev - kl_dev.min()) / (kl_dev.max() - kl_dev.min() + 1e-8)
+    return alpha * recon_norm + beta * kl_norm
+
+
+def compute_hc_latent_stats(model, hc_data, device='cuda'):
+    """
+    Compute HC population statistics in latent space for Aguila method
+    """
+    model.eval()
+    with torch.no_grad():
+        hc_tensor = torch.FloatTensor(hc_data).to(device)
+        _, mu, _ = model(hc_tensor)
+        hc_mean = mu.mean(dim=0)
+        hc_std = mu.std(dim=0)
+    return {
+        'mean': hc_mean.cpu().numpy(),
+        'std': hc_std.cpu().numpy()
+    }
+
+
+def create_paper_style_boxplots(deviation_df, save_dir, norm_diagnosis='HC'):
+    """
+    Create Figure 3 style boxplots from Aguila et al. paper
+    One plot per deviation metric with p-values
+    """
+    from scipy.stats import mannwhitneyu
+    
+    dev_columns = [col for col in deviation_df.columns if col.startswith('deviation_')]
+    
+    label_map = {
+        'deviation_recon': '$D_{MSE}$ (Reconstruction)',
+        'deviation_kl': '$D_{KL}$ (KL Divergence)',
+        'deviation_latent_aguila': '$D_L$ (Latent - Aguila)',
+        'deviation_combined': '$D_{Combined}$'
+    }
+    
+    diagnoses = deviation_df['Diagnosis'].unique()
+    patient_diagnoses = [d for d in diagnoses if d != norm_diagnosis]
+    
+    for dev_col in dev_columns:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        plot_data = []
+        plot_labels = []
+        
+        # HC first
+        if norm_diagnosis in diagnoses:
+            hc_data = deviation_df[deviation_df['Diagnosis'] == norm_diagnosis][dev_col].dropna()
+            plot_data.append(hc_data)
+            plot_labels.append(norm_diagnosis)
+        
+        # Other diagnoses
+        for diag in patient_diagnoses:
+            diag_data = deviation_df[deviation_df['Diagnosis'] == diag][dev_col].dropna()
+            if len(diag_data) > 0:
+                plot_data.append(diag_data)
+                plot_labels.append(diag)
+        
+        # Boxplot
+        bp = ax.boxplot(plot_data, labels=plot_labels, patch_artist=True,
+                        showfliers=True, widths=0.6)
+        
+        # Color HC differently
+        colors = ['#3498db'] + ['#e74c3c'] * (len(plot_labels) - 1)
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.7)
+        
+        # P-values
+        if norm_diagnosis in diagnoses:
+            hc_vals = deviation_df[deviation_df['Diagnosis'] == norm_diagnosis][dev_col].dropna()
+            y_max = max([d.max() for d in plot_data])
+            y_step = (y_max - min([d.min() for d in plot_data])) * 0.1
+            
+            for i, diag in enumerate(patient_diagnoses, start=2):
+                diag_vals = deviation_df[deviation_df['Diagnosis'] == diag][dev_col].dropna()
+                if len(diag_vals) > 0:
+                    _, p_value = mannwhitneyu(hc_vals, diag_vals, alternative='two-sided')
+                    
+                    y_pos = y_max + (i-1) * y_step * 0.3
+                    ax.plot([1, i], [y_pos, y_pos], 'k-', linewidth=0.8)
+                    
+                    if p_value < 0.001:
+                        p_text = 'p<0.001'
+                    elif p_value < 0.01:
+                        p_text = 'p<0.01'
+                    else:
+                        p_text = f'p={p_value:.3f}'
+                    
+                    ax.text((1 + i) / 2, y_pos * 1.02, p_text, 
+                           ha='center', va='bottom', fontsize=9)
+        
+        # Labels
+        nice_label = label_map.get(dev_col, dev_col)
+        ax.set_ylabel(nice_label, fontsize=12, fontweight='bold')
+        ax.set_xlabel('Diagnosis', fontsize=12, fontweight='bold')
+        ax.set_title(f'{nice_label}: {norm_diagnosis} vs Disease Cohorts', 
+                    fontsize=14, fontweight='bold', pad=20)
+        ax.yaxis.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        
+        plt.tight_layout()
+        
+        metric_name = dev_col.replace('deviation_', '')
+        plt.savefig(f"{save_dir}/figures/paper_style_{metric_name}_boxplot.png", 
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        log_and_print_test(f"✓ Created paper-style boxplot for {nice_label}")
+        
 def calculate_group_pvalues(results_df, norm_diagnosis, split_ctt=False):
     #Calculate p-values for each diagnosis group compared to the control group
     

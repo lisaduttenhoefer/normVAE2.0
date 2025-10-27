@@ -18,7 +18,7 @@ from utils.support_f import (
 )
 from utils.config_utils_model import Config_2D
 from module.data_processing_hc import (
-    load_mri_data_2D,
+    load_mri_data_2D_prenormalized,
 )
 from utils.logging_utils import (
     setup_logging_test, 
@@ -29,6 +29,11 @@ from utils.dev_scores_utils import (
     calculate_deviations, 
     plot_deviation_distributions, 
     analyze_regional_deviations,
+    calculate_reconstruction_deviation,
+    calculate_kl_divergence_deviation,
+    calculate_latent_deviation_aguila,
+    calculate_combined_deviation,
+    compute_hc_latent_stats,
     save_latent_visualizations,
     visualize_embeddings_multiple,
     create_corrected_correlation_heatmap,
@@ -165,17 +170,15 @@ def main(args):
     log_and_print_test(f"Using MRI data from: {path_to_clinical_data}")
 
     # Load clinical data - NEW: using load_mri_data_2D with column-wise normalization
-    subjects, annotations_dev, roi_names = load_mri_data_2D(
-        data_path=path_to_clinical_data,
-        atlas_name=atlas_name,
-        csv_paths=[metadata_test],
-        annotations=None,
-        diagnoses=None,
-        train_or_test="test",
-        volume_type=volume_type,
-        valid_volume_types=valid_volume_types,
-        use_tiv_normalization=True,
-        normalization_method="columnwise"  # CRITICAL: Use column-wise for combined analysis
+    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC.csv"
+
+    TEST_CSV = config_df["TEST_CSV"].iloc[0] if "TEST_CSV" in config_df.columns else args.clinical_csv
+
+    subjects_dev, annotations_dev, roi_names = load_mri_data_2D_prenormalized(
+        normalized_csv_path=NORMALIZED_CSV,  # ← Pre-normalized!
+        csv_paths=[TEST_CSV],
+        diagnoses=None,  # All diagnoses for testing
+        covars=[]
     )
     
     # Extract clinical data tensor
@@ -262,17 +265,108 @@ def main(args):
     }
     
     try:
-        # Calculate deviation scores using ALL features
-        log_and_print_test("Calculating deviation scores for all subjects...")
+        # ==================== CALCULATE MULTIPLE DEVIATION SCORES ====================
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("Computing MULTIPLE deviation score methods...")
+        log_and_print_test("="*80)
         
+        # Original bootstrap method (keep this!)
+        log_and_print_test("\n[1/5] Calculating BOOTSTRAP deviation scores (original method)...")
         results_df = calculate_deviations(
-            clinical_data=clinical_data,
             normative_models=bootstrap_models,
-            annotations_df=annotations_dev,
-            roi_names=roi_names,
+            data_tensor=clinical_data,
             norm_diagnosis=norm_diagnosis,
+            annotations_df=annotations_dev,
+            device=device,
+            roi_names=roi_names
+        )
+        
+        # Use baseline model for additional metrics
+        baseline_model_path = os.path.join(models_dir, "../baseline_model.pt")
+        if os.path.exists(baseline_model_path):
+            baseline_model = NormativeVAE_2D(
+                input_dim=input_dim,
+                hidden_dim_1=hidden_dim_1,
+                hidden_dim_2=hidden_dim_2,
+                latent_dim=latent_dim,
+                learning_rate=learning_rate,
+                kldiv_loss_weight=kldiv_loss_weight,
+                recon_loss_weight=recon_loss_weight,
+                contr_loss_weight=contr_loss_weight,
+                dropout_prob=0.1,
+                device=device
+            )
+            baseline_model.load_state_dict(torch.load(baseline_model_path, map_location=device))
+            baseline_model.to(device)
+            baseline_model.eval()
+            log_and_print_test("✓ Loaded baseline model for additional metrics")
+        else:
+            log_and_print_test("⚠ Baseline model not found, using first bootstrap model")
+            baseline_model = bootstrap_models[0]
+        
+        # Separate HC data for latent stats
+        hc_mask = annotations_dev['Diagnosis'] == norm_diagnosis
+        hc_data = clinical_data[hc_mask]
+        log_and_print_test(f"   HC subjects in test set: {len(hc_data)}")
+        
+        # METHOD 1: Reconstruction Deviation
+        log_and_print_test("\n[2/5] Computing D_MSE (Reconstruction-based)...")
+        deviation_recon = calculate_reconstruction_deviation(
+            model=baseline_model,
+            data=clinical_data,
             device=device
         )
+        log_and_print_test(f"   Range: [{deviation_recon.min():.4f}, {deviation_recon.max():.4f}]")
+        log_and_print_test(f"   HC mean: {deviation_recon[hc_mask].mean():.4f} ± {deviation_recon[hc_mask].std():.4f}")
+        
+        # METHOD 2: KL Divergence
+        log_and_print_test("\n[3/5] Computing D_KL (KL Divergence)...")
+        deviation_kl = calculate_kl_divergence_deviation(
+            model=baseline_model,
+            data=clinical_data,
+            device=device
+        )
+        log_and_print_test(f"   Range: [{deviation_kl.min():.4f}, {deviation_kl.max():.4f}]")
+        log_and_print_test(f"   HC mean: {deviation_kl[hc_mask].mean():.4f} ± {deviation_kl[hc_mask].std():.4f}")
+        
+        # METHOD 3: Latent Deviation (Aguila)
+        log_and_print_test("\n[4/5] Computing D_L (Latent-based, Aguila method)...")
+        hc_latent_stats = compute_hc_latent_stats(
+            model=baseline_model,
+            hc_data=hc_data,
+            device=device
+        )
+        log_and_print_test(f"   HC latent mean: {hc_latent_stats['mean'].mean():.4f}")
+        log_and_print_test(f"   HC latent std: {hc_latent_stats['std'].mean():.4f}")
+        
+        deviation_latent_aguila, per_dim_dev = calculate_latent_deviation_aguila(
+            model=baseline_model,
+            data=clinical_data,
+            hc_latent_stats=hc_latent_stats,
+            device=device
+        )
+        log_and_print_test(f"   Range: [{deviation_latent_aguila.min():.4f}, {deviation_latent_aguila.max():.4f}]")
+        log_and_print_test(f"   HC mean: {deviation_latent_aguila[hc_mask].mean():.4f} ± {deviation_latent_aguila[hc_mask].std():.4f}")
+        
+        # METHOD 4: Combined
+        log_and_print_test("\n[5/5] Computing D_Combined (Weighted combination)...")
+        deviation_combined = calculate_combined_deviation(
+            recon_dev=deviation_recon,
+            kl_dev=deviation_kl,
+            alpha=0.7,
+            beta=0.3
+        )
+        log_and_print_test(f"   Range: [{deviation_combined.min():.4f}, {deviation_combined.max():.4f}]")
+        log_and_print_test(f"   HC mean: {deviation_combined[hc_mask].mean():.4f} ± {deviation_combined[hc_mask].std():.4f}")
+        
+        # ADD NEW METRICS TO RESULTS_DF
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("Adding new deviation metrics to results...")
+        results_df['deviation_recon'] = deviation_recon
+        results_df['deviation_kl'] = deviation_kl
+        results_df['deviation_latent_aguila'] = deviation_latent_aguila
+        results_df['deviation_combined'] = deviation_combined
+        log_and_print_test("✓ All deviation metrics computed and added to results!")
         
         log_and_print_test(f"Calculated deviation scores for {len(results_df)} subjects")
         
@@ -281,14 +375,90 @@ def main(args):
         results_df.to_csv(output_file, index=False)
         log_and_print_test(f"Saved deviation scores to: {output_file}")
         
-        # Calculate mean and std per diagnosis
+        # Calculate mean and std per diagnosis for ALL metrics
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("SUMMARY: Mean deviation scores by diagnosis")
+        log_and_print_test("="*80)
+        
+        # Original bootstrap deviation
         summary_stats = results_df.groupby('Diagnosis')['deviation_score'].agg(['mean', 'std', 'count'])
         summary_file = os.path.join(save_dir, "deviation_score_summary.csv")
         summary_stats.to_csv(summary_file)
-        log_and_print_test(f"Saved summary statistics to: {summary_file}")
-        
-        log_and_print_test("\nDeviation Score Summary:")
+        log_and_print_test(f"\nBootstrap Deviation Score (deviation_score):")
         log_and_print_test(summary_stats.to_string())
+        
+        # Summary for each new metric
+        for metric in ['deviation_recon', 'deviation_kl', 'deviation_latent_aguila', 'deviation_combined']:
+            if metric in results_df.columns:
+                log_and_print_test(f"\n{metric}:")
+                for diag in results_df['Diagnosis'].unique():
+                    diag_vals = results_df[results_df['Diagnosis'] == diag][metric]
+                    log_and_print_test(f"  {diag:8s}: {diag_vals.mean():8.4f} ± {diag_vals.std():8.4f} (n={len(diag_vals)})")
+        
+        log_and_print_test("="*80)
+        
+        # ==================== ERRORBAR PLOTS FOR ALL METRICS ====================
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("Creating errorbar plots for ALL deviation metrics...")
+        log_and_print_test("="*80)
+        
+        deviation_columns = [col for col in results_df.columns if col.startswith('deviation_')]
+        
+        label_map = {
+            'deviation_score': 'Bootstrap Deviation',
+            'deviation_recon': 'Reconstruction Error (MSE)',
+            'deviation_kl': 'KL Divergence',
+            'deviation_latent_aguila': 'Latent Deviation (Aguila)',
+            'deviation_combined': 'Combined Deviation'
+        }
+        
+        for dev_col in deviation_columns:
+            summary = results_df.groupby('Diagnosis')[dev_col].agg(['mean', 'sem', 'count'])
+            summary = summary.reset_index()
+            
+            if norm_diagnosis in summary['Diagnosis'].values:
+                hc_row = summary[summary['Diagnosis'] == norm_diagnosis]
+                other_rows = summary[summary['Diagnosis'] != norm_diagnosis].sort_values('mean', ascending=False)
+                summary = pd.concat([hc_row, other_rows])
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            x_pos = np.arange(len(summary))
+            
+            bars = ax.bar(x_pos, summary['mean'], 
+                         yerr=summary['sem'],
+                         capsize=5,
+                         alpha=0.8,
+                         color=[custom_colors.get(diag, '#888888') for diag in summary['Diagnosis']],
+                         edgecolor='black',
+                         linewidth=1.5)
+            
+            ax.set_xlabel('Diagnosis', fontsize=14, fontweight='bold')
+            ylabel = label_map.get(dev_col, dev_col.replace('_', ' ').title())
+            ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
+            ax.set_title(f'{ylabel} by Diagnosis', fontsize=16, fontweight='bold', pad=20)
+            
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(summary['Diagnosis'], fontsize=12, fontweight='bold')
+            
+            ax.yaxis.grid(True, alpha=0.3, linestyle='--')
+            ax.set_axisbelow(True)
+            
+            for i, (idx, row) in enumerate(summary.iterrows()):
+                ax.text(i, row['mean'] + row['sem'], f"n={int(row['count'])}", 
+                       ha='center', va='bottom', fontsize=9)
+            
+            plt.tight_layout()
+            
+            metric_name = dev_col.replace('deviation_', '')
+            filename = f"{metric_name}_errorbar_ctt_combined.png"
+            plt.savefig(f"{save_dir}/figures/distributions/{filename}", 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            log_and_print_test(f"✓ Created errorbar plot: {filename}")
+        
+        log_and_print_test("✓ All errorbar plots created!")
+        log_and_print_test("="*80)
         
         # ==================================================================================
         # STATISTICAL TESTS
@@ -321,16 +491,14 @@ def main(args):
         log_and_print_test("="*80 + "\n")
         
         # Plot deviation score distributions
-        fig_dist = plot_deviation_distributions(
+        plot_results = plot_deviation_distributions(
             results_df=results_df,
+            save_dir=save_dir,
             norm_diagnosis=norm_diagnosis,
-            custom_colors=custom_colors
+            col_jitter=False,
+            name="combined_analysis"
         )
-        
-        dist_file = os.path.join(save_dir, "figures", "distributions", "deviation_score_distributions.png")
-        fig_dist.savefig(dist_file, dpi=300, bbox_inches='tight')
-        plt.close(fig_dist)
-        log_and_print_test(f"Saved distribution plot: {dist_file}")
+        log_and_print_test("Plotted deviation distributions")
         
         # ==================================================================================
         # REGIONAL ANALYSIS
@@ -340,24 +508,40 @@ def main(args):
         log_and_print_test("REGIONAL DEVIATION ANALYSIS")
         log_and_print_test("="*80 + "\n")
         
+        # Create subdirectories for regional analysis
+        os.makedirs(f"{save_dir}/figures", exist_ok=True)
+        
         regional_results = analyze_regional_deviations(
-            clinical_data=clinical_data,
-            normative_models=bootstrap_models,
-            annotations_df=annotations_dev,
+            results_df=results_df,
+            save_dir=save_dir,
+            clinical_data_path=mri_data_path,
+            volume_type=volume_type,
+            atlas_name=atlas_name,
             roi_names=roi_names,
             norm_diagnosis=norm_diagnosis,
-            device=device
+            name="combined_analysis",
+            add_catatonia_subgroups=False,
+            metadata_path=metadata_path,
+            subgroup_columns=None,
+            high_low_thresholds=None,
+            merge_ctt_groups=True
         )
         
         # Save regional effect sizes
-        regional_file = os.path.join(save_dir, "regional_effect_sizes_combined.csv")
-        regional_results.to_csv(regional_file, index=False)
-        log_and_print_test(f"Saved regional effect sizes to: {regional_file}")
-        
-        # Show top 20 ROIs with largest deviations
-        log_and_print_test("\nTop 20 ROIs with largest deviations:")
-        top_rois = regional_results.nlargest(20, 'mean_deviation')
-        log_and_print_test(top_rois[['roi_name', 'mean_deviation', 'volume_type']].to_string(index=False))
+        if regional_results is not None and not regional_results.empty:
+            regional_file = os.path.join(save_dir, "regional_effect_sizes_combined.csv")
+            regional_results.to_csv(regional_file, index=False)
+            log_and_print_test(f"Saved regional effect sizes to: {regional_file}")
+            
+            # Show top 20 ROIs with largest effect sizes (using Cliff's Delta)
+            if 'Cliffs_Delta' in regional_results.columns:
+                log_and_print_test("\nTop 20 ROIs with largest Cliff's Delta:")
+                # Sort by absolute value of Cliff's Delta
+                regional_results['Abs_Cliffs_Delta'] = regional_results['Cliffs_Delta'].abs()
+                top_rois = regional_results.nlargest(20, 'Abs_Cliffs_Delta')
+                log_and_print_test(top_rois[['ROI_Name', 'Diagnosis', 'Cliffs_Delta', 'Significant_Bootstrap_p05_uncorrected']].to_string(index=False))
+        else:
+            log_and_print_test("No regional results generated")
         
         # ==================================================================================
         # CORRELATION WITH CLINICAL VARIABLES
@@ -367,20 +551,20 @@ def main(args):
         log_and_print_test("CORRELATION WITH CLINICAL VARIABLES")
         log_and_print_test("="*80 + "\n")
         
-        # Merge results with full metadata if available
-        if 'Age' in annotations_dev.columns:
-            # Create correlation heatmap
-            fig_corr = create_corrected_correlation_heatmap(
-                results_df=results_df,
-                clinical_vars=['Age'],  # Add more variables as needed
-                save_path=os.path.join(save_dir, "figures", "clinical_correlations.png")
-            )
-            log_and_print_test("Saved clinical correlation heatmap")
+    #     # Merge results with full metadata if available
+    #     if 'Age' in annotations_dev.columns:
+    #         # Create correlation heatmap
+    #         fig_corr = create_corrected_correlation_heatmap(
+    #             results_df=results_df,
+    #             clinical_vars=['Age'],  # Add more variables as needed
+    #             save_path=os.path.join(save_dir, "figures", "clinical_correlations.png")
+    #         )
+    #         log_and_print_test("Saved clinical correlation heatmap")
         
-    except Exception as e:
-        log_and_print_test(f"ERROR in combined analysis: {e}")
-        import traceback
-        log_and_print_test(traceback.format_exc())
+    # except Exception as e:
+    #     log_and_print_test(f"ERROR in combined analysis: {e}")
+    #     import traceback
+    #     log_and_print_test(traceback.format_exc())
     
     # ==================================================================================
     # LATENT SPACE VISUALIZATION (ALL FEATURES)
@@ -405,6 +589,12 @@ def main(args):
     except Exception as e:
         log_and_print_test(f"Warning: Could not complete latent space visualization: {e}")
     
+    # NOTE: Paper-style plots (regional effect sizes) are created in 
+    # analyze_regional_deviations() and saved as:
+    #   - figures/paper_style_SCHZ_vs_HC.png
+    #   - figures/paper_style_MDD_vs_HC.png
+    #   - figures/paper_style_CTT_vs_HC.png
+    
     # ==================================================================================
     # FINAL SUMMARY
     # ==================================================================================
@@ -414,11 +604,21 @@ def main(args):
     log_and_print_test("="*80)
     log_and_print_test(f"Main output directory: {save_dir}")
     log_and_print_test(f"\nKey outputs:")
-    log_and_print_test(f"  - deviation_scores_combined.csv")
+    log_and_print_test(f"  - deviation_scores_combined.csv (includes ALL 5 deviation methods)")
     log_and_print_test(f"  - deviation_score_summary.csv")
     log_and_print_test(f"  - regional_effect_sizes_combined.csv")
-    log_and_print_test(f"  - figures/distributions/deviation_score_distributions.png")
-    log_and_print_test(f"  - figures/latent_embeddings/")
+    log_and_print_test(f"\nPlots:")
+    log_and_print_test(f"  Deviation distributions (figures/distributions/):")
+    log_and_print_test(f"    - score_errorbar_ctt_combined.png (Bootstrap)")
+    log_and_print_test(f"    - recon_errorbar_ctt_combined.png (Reconstruction)")
+    log_and_print_test(f"    - kl_errorbar_ctt_combined.png (KL Divergence)")
+    log_and_print_test(f"    - latent_aguila_errorbar_ctt_combined.png (Aguila method)")
+    log_and_print_test(f"    - combined_errorbar_ctt_combined.png (Combined)")
+    log_and_print_test(f"  Regional effect sizes (figures/):")
+    log_and_print_test(f"    - paper_style_SCHZ_vs_HC.png")
+    log_and_print_test(f"    - paper_style_MDD_vs_HC.png")
+    log_and_print_test(f"    - paper_style_CTT_vs_HC.png")
+    log_and_print_test(f"  Latent embeddings (figures/latent_embeddings/)")
     log_and_print_test("="*80 + "\n")
     
     end_logging(Config_2D)

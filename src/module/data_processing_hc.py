@@ -447,6 +447,181 @@ def normalize_volume_types_separately(
     else:
         raise ValueError(f"Unknown normalization method: {method}. Use 'rowwise' or 'columnwise'")
 
+"""
+Simplified load_mri_data_2D for PRE-NORMALIZED data.
+
+This version:
+1. Loads the pre-normalized CSV (already has HC-only stats applied)
+2. Filters to requested subjects (from metadata CSV)
+3. Returns subjects in the expected format
+
+NO normalization is done here - it was already done in preprocessing!
+"""
+
+import pandas as pd
+import numpy as np
+import os
+import re
+from typing import List, Tuple
+
+
+def load_mri_data_2D_prenormalized(
+    normalized_csv_path: str,  # NEW! Path to pre-normalized CSV
+    csv_paths: List[str] = None,
+    diagnoses: List[str] = None,
+    covars: List[str] = [],
+) -> Tuple:
+    """
+    Load pre-normalized MRI data and filter to requested subjects.
+    
+    Args:
+        normalized_csv_path: Path to the pre-normalized CSV
+        csv_paths: List of metadata CSV paths (determines train/test split)
+        diagnoses: List of diagnoses to include (None = all)
+        covars: List of covariates for one-hot encoding
+        
+    Returns:
+        subjects: List of subject dictionaries
+        data_overview: DataFrame with metadata
+        roi_names: List of ROI column names
+    """
+    
+    print("="*80)
+    print("[INFO] Loading PRE-NORMALIZED MRI data")
+    print("="*80)
+    
+    # ==================== STEP 1: Load Metadata ====================
+    print(f"[INFO] Loading metadata from: {csv_paths}")
+    
+    csv_paths = [path.strip("[]'\"") for path in csv_paths]
+    
+    data_overview_list = []
+    for csv_path in csv_paths:
+        if not os.path.isfile(csv_path):
+            raise FileNotFoundError(f"[ERROR] CSV file '{csv_path}' not found")
+        df = pd.read_csv(csv_path)
+        data_overview_list.append(df)
+    
+    data_overview = pd.concat(data_overview_list, ignore_index=True)
+    print(f"[INFO] Loaded metadata with {len(data_overview)} subjects")
+    
+    # ==================== STEP 2: Filter by Diagnosis ====================
+    if diagnoses is None:
+        diagnoses = data_overview["Diagnosis"].unique().tolist()
+    
+    data_overview = data_overview[data_overview["Diagnosis"].isin(diagnoses)]
+    data_overview = data_overview.reset_index(drop=True)
+    
+    print(f"[INFO] Filtered to {len(data_overview)} subjects with diagnoses: {diagnoses}")
+    
+    # ==================== STEP 3: Load Pre-Normalized MRI Data ====================
+    print(f"[INFO] Loading pre-normalized MRI data from: {normalized_csv_path}")
+    
+    if not os.path.isfile(normalized_csv_path):
+        raise FileNotFoundError(f"[ERROR] Normalized CSV not found: {normalized_csv_path}")
+    
+    mri_data = pd.read_csv(normalized_csv_path)
+    print(f"[INFO] Loaded MRI data with shape: {mri_data.shape}")
+    
+    # ==================== STEP 4: Identify ROI Columns ====================
+    # ROI columns are everything except metadata columns
+    metadata_columns = [
+        'Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV',
+        'GM_vol', 'WM_vol', 'CSF_vol', 'WMH_vol',
+        'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
+        'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global'
+    ]
+    roi_columns = [col for col in mri_data.columns if col not in metadata_columns]
+    
+    print(f"[INFO] Found {len(roi_columns)} ROI columns")
+    
+    # Count by volume type
+    vgm_cols = [col for col in roi_columns if col.startswith('Vgm_')]
+    g_cols = [col for col in roi_columns if col.startswith('G_')]
+    t_cols = [col for col in roi_columns if col.startswith('T_')]
+    
+    print(f"[INFO]   - Vgm: {len(vgm_cols)} features")
+    print(f"[INFO]   - G: {len(g_cols)} features")
+    print(f"[INFO]   - T: {len(t_cols)} features")
+    print(f"[INFO]   - Total: {len(roi_columns)} features")
+    
+    # ==================== STEP 5: Prepare One-Hot Labels ====================
+    covars = [covars] if not isinstance(covars, list) else covars
+    
+    one_hot_labels = {}
+    variables = ["Diagnosis"] + covars
+    
+    for var in variables:
+        if var not in data_overview.columns:
+            raise ValueError(f"[ERROR] Column '{var}' not found in metadata")
+        one_hot_labels[var] = pd.get_dummies(data_overview[var], dtype=float)
+    
+    # ==================== STEP 6: Match Subjects ====================
+    print("[INFO] Matching metadata subjects with MRI data...")
+    
+    subjects_dict = {}
+    matched_count = 0
+    unmatched = []
+    
+    for index, row in data_overview.iterrows():
+        filename = row["Filename"]
+        
+        # Try to find in MRI data
+        # Handle potential differences in filename format
+        filename_clean = re.sub(r"\.[^.]+$", "", filename)
+        
+        mri_row = mri_data[mri_data['Filename'] == filename]
+        if mri_row.empty:
+            mri_row = mri_data[mri_data['Filename'] == filename_clean]
+        
+        if mri_row.empty:
+            unmatched.append(filename)
+            continue
+        
+        # Extract ROI measurements (already normalized!)
+        measurements = mri_row[roi_columns].values.flatten().tolist()
+        
+        # Create subject entry
+        subjects_dict[filename] = {
+            "name": filename,
+            "measurements": measurements,
+            "labels": {var: one_hot_labels[var].iloc[index].to_numpy().tolist() 
+                      for var in variables}
+        }
+        matched_count += 1
+    
+    print(f"[INFO] Successfully matched {matched_count}/{len(data_overview)} subjects")
+    
+    if unmatched:
+        print(f"[WARNING] {len(unmatched)} subjects not found in MRI data")
+        if len(unmatched) <= 10:
+            print(f"[WARNING] Unmatched: {unmatched}")
+    
+    # ==================== STEP 7: Convert to List ====================
+    subjects = list(subjects_dict.values())
+    
+    print(f"[INFO] Total subjects processed: {len(subjects)}")
+    print(f"[INFO] Total ROI features per subject: {len(roi_columns)}")
+    print("[INFO] Data loading complete!")
+    print("="*80)
+    
+    return subjects, data_overview, roi_columns
+
+
+# ==================== HELPER FUNCTION ====================
+def verify_normalization(subjects: List, subject_count: int = 5):
+    """
+    Quick check to verify the data looks normalized.
+    """
+    print("\n[INFO] Verifying normalization (checking first few subjects)...")
+    
+    for i in range(min(subject_count, len(subjects))):
+        measurements = np.array(subjects[i]['measurements'])
+        print(f"  Subject {i+1}: mean={measurements.mean():.3f}, std={measurements.std():.3f}, "
+              f"range=[{measurements.min():.3f}, {measurements.max():.3f}]")
+    
+    print("[INFO] Note: Individual subjects may not have mean=0, std=1")
+    print("[INFO] Only the Training-HC group as a whole should have mean≈0, std≈1")
 
 def load_mri_data_2D(
     data_path: str,
