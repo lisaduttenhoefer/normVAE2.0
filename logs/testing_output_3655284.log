@@ -1,0 +1,326 @@
+----------[INFO] Starting COMBINED deviation analysis (all volume types together)
+----------[INFO] Model directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334
+----------[INFO] Output directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232
+----------[INFO] Loaded model configuration from /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334/config.csv
+----------[INFO] Using atlas: ['all']
+----------[INFO] Using latent dimension: 20
+----------[INFO] Using normative diagnosis: HC
+----------[INFO] Using volume type: ['Vgm', 'G', 'T']
+----------[INFO] Using valid volume types: ['Vgm', 'Vwm', 'Vcsf', 'G', 'T']
+----------[INFO] Using clinical mri data path: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+----------[INFO] Using metadata CSV: ['/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251031_1334.csv']
+----------[INFO] Using device: cuda
+----------[INFO] Loading clinical data...
+----------[INFO] Loading test data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251031_1334.csv
+----------[INFO] Using MRI data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+================================================================================
+[INFO] Loading PRE-NORMALIZED MRI data
+================================================================================
+[INFO] Loading metadata from: ["['/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251031_1334.csv']"]
+[INFO] Loaded metadata with 2213 subjects
+[INFO] Filtered to 2213 subjects with diagnoses: ['HC', 'MDD', 'SCHZ', 'CTT-SCHZ', 'CTT-MDD', 'BP', 'GenPop']
+[INFO] Loading pre-normalized MRI data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC.csv
+[INFO] Loaded MRI data with shape: (4163, 1211)
+[INFO] Found 1194 ROI columns
+[INFO]   - Vgm: 761 features
+[INFO]   - G: 216 features
+[INFO]   - T: 217 features
+[INFO]   - Total: 1194 features
+[INFO] Matching metadata subjects with MRI data...
+[INFO] Successfully matched 2209/2213 subjects
+[WARNING] 4 subjects not found in MRI data
+[WARNING] Unmatched: ['sub-NDARINVTY904UNB_run01_T1w', 'sub-NDARINVGW978HUP_run01_T1w', 'sub-NDARINVHR360FAK_run01_T1w', 'sub-NDARINVLJ841ZFK_run01_T1w']
+[INFO] Total subjects processed: 2209
+[INFO] Total ROI features per subject: 1194
+[INFO] Data loading complete!
+================================================================================
+----------[INFO] Clinical data shape: torch.Size([2209, 1194])
+----------[INFO] Clinical data has 1194 features
+----------[INFO] Annotations shape before filtering: 2213
+----------[INFO] Clinical data subjects: 2209
+----------[INFO] WARNING: Could not find subject ID column in annotations
+----------[INFO] Available columns: ['Filename', 'Dataset', 'Diagnosis', 'Age', 'Sex', 'Sex_int', 'Co_Diagnosis', 'ICD10_Code', 'GAF_Score', 'PANSS_Positive', 'PANSS_Negative', 'PANSS_General', 'PANSS_Total', 'BPRS_Total', 'NCRS_Motor', 'NCRS_Affective', 'NCRS_Behavioral', 'NCRS_Total', 'NSS_Motor', 'NSS_Total']
+----------[INFO] Fallback: Truncated annotations to first 2209 rows
+----------[INFO] Annotations shape after filtering: 2209
+----------[INFO] ✓ Annotations and clinical data are now aligned!
+----------[INFO] Loading bootstrap models...
+----------[INFO] Found 51 bootstrap models
+----------[INFO] Models were trained with input_dim: 1194
+----------[INFO] Loaded model: baseline_model.pt
+----------[INFO] Loaded model: bootstrap_model_0.pt
+----------[INFO] Loaded model: bootstrap_model_1.pt
+----------[INFO] Loaded model: bootstrap_model_10.pt
+----------[INFO] Loaded model: bootstrap_model_11.pt
+----------[INFO] Loaded model: bootstrap_model_12.pt
+----------[INFO] Loaded model: bootstrap_model_13.pt
+----------[INFO] Loaded model: bootstrap_model_14.pt
+----------[INFO] Loaded model: bootstrap_model_15.pt
+----------[INFO] Loaded model: bootstrap_model_16.pt
+----------[INFO] Loaded model: bootstrap_model_17.pt
+----------[INFO] Loaded model: bootstrap_model_18.pt
+----------[INFO] Loaded model: bootstrap_model_19.pt
+----------[INFO] Loaded model: bootstrap_model_2.pt
+----------[INFO] Loaded model: bootstrap_model_20.pt
+----------[INFO] Loaded model: bootstrap_model_21.pt
+----------[INFO] Loaded model: bootstrap_model_22.pt
+----------[INFO] Loaded model: bootstrap_model_23.pt
+----------[INFO] Loaded model: bootstrap_model_24.pt
+----------[INFO] Loaded model: bootstrap_model_25.pt
+----------[INFO] Loaded model: bootstrap_model_26.pt
+----------[INFO] Loaded model: bootstrap_model_27.pt
+----------[INFO] Loaded model: bootstrap_model_28.pt
+----------[INFO] Loaded model: bootstrap_model_29.pt
+----------[INFO] Loaded model: bootstrap_model_3.pt
+----------[INFO] Loaded model: bootstrap_model_30.pt
+----------[INFO] Loaded model: bootstrap_model_31.pt
+----------[INFO] Loaded model: bootstrap_model_32.pt
+----------[INFO] Loaded model: bootstrap_model_33.pt
+----------[INFO] Loaded model: bootstrap_model_34.pt
+----------[INFO] Loaded model: bootstrap_model_35.pt
+----------[INFO] Loaded model: bootstrap_model_36.pt
+----------[INFO] Loaded model: bootstrap_model_37.pt
+----------[INFO] Loaded model: bootstrap_model_38.pt
+----------[INFO] Loaded model: bootstrap_model_39.pt
+----------[INFO] Loaded model: bootstrap_model_4.pt
+----------[INFO] Loaded model: bootstrap_model_40.pt
+----------[INFO] Loaded model: bootstrap_model_41.pt
+----------[INFO] Loaded model: bootstrap_model_42.pt
+----------[INFO] Loaded model: bootstrap_model_43.pt
+----------[INFO] Loaded model: bootstrap_model_44.pt
+----------[INFO] Loaded model: bootstrap_model_45.pt
+----------[INFO] Loaded model: bootstrap_model_46.pt
+----------[INFO] Loaded model: bootstrap_model_47.pt
+----------[INFO] Loaded model: bootstrap_model_48.pt
+----------[INFO] Loaded model: bootstrap_model_49.pt
+----------[INFO] Loaded model: bootstrap_model_5.pt
+----------[INFO] Loaded model: bootstrap_model_6.pt
+----------[INFO] Loaded model: bootstrap_model_7.pt
+----------[INFO] Loaded model: bootstrap_model_8.pt
+----------[INFO] Loaded model: bootstrap_model_9.pt
+----------[INFO] Successfully loaded 51 models
+----------[INFO] 
+================================================================================
+----------[INFO] STARTING COMBINED DEVIATION ANALYSIS
+----------[INFO] Analyzing ALL 1194 features together (Vgm + G + T)
+----------[INFO] ================================================================================
+
+----------[INFO] 
+================================================================================
+----------[INFO] Computing MULTIPLE deviation score methods...
+----------[INFO] ================================================================================
+----------[INFO] 
+[1/5] Calculating BOOTSTRAP deviation scores (original method)...
+[INFO] Using 1194 ROI names for region columns
+----------[INFO] ⚠ Baseline model not found, using first bootstrap model
+----------[INFO]    HC subjects in test set: 838
+----------[INFO] 
+[2/5] Computing D_MSE (Reconstruction-based)...
+----------[INFO]    Range: [0.3803, 3.2459]
+----------[INFO]    HC mean: 0.6901 ± 0.1671
+----------[INFO] 
+[3/5] Computing D_KL (KL Divergence)...
+----------[INFO]    Range: [3.6891, 11.6850]
+----------[INFO]    HC mean: 7.3131 ± 1.2309
+----------[INFO] 
+[4/5] Computing D_latent (Aguila et al. method)...
+----------[INFO]    Range: [0.0453, 1.0440]
+----------[INFO]    HC mean: 0.4389 ± 0.2098
+----------[INFO] 
+[5/5] Computing D_combined (weighted combination)...
+----------[INFO]    Range: [0.0817, 0.7593]
+----------[INFO]    HC mean: 0.2116 ± 0.0529
+----------[INFO] 
+✓ Adding all deviation methods to results DataFrame...
+----------[INFO] ✓ All 5 deviation methods computed:
+----------[INFO]    1. deviation_score (Bootstrap)
+----------[INFO]    2. deviation_score_recon (D_MSE)
+----------[INFO]    3. deviation_score_kl (D_KL)
+----------[INFO]    4. deviation_score_latent_aguila (D_latent)
+----------[INFO]    5. deviation_score_combined (Weighted)
+----------[INFO] 
+================================================================================
+----------[INFO] SAVING RESULTS
+----------[INFO] ================================================================================
+
+----------[INFO] Saved deviation scores (ALL methods) to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232/deviation_scores_combined.csv
+----------[INFO] Saved summary statistics to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232/deviation_score_summary.csv
+----------[INFO] 
+================================================================================
+----------[INFO] CREATING VISUALIZATIONS
+----------[INFO] ================================================================================
+
+Control group (HC) size: 838
+    Mann-Whitney U: statistic=153361.00, p=0.002064
+    T-test (comparison): t=2.76, p=0.005985
+    Mann-Whitney U: statistic=434343.00, p=0.000000
+    T-test (comparison): t=6.60, p=0.000000
+    Mann-Whitney U: statistic=39373.00, p=0.046822
+    T-test (comparison): t=1.76, p=0.081138
+    Mann-Whitney U: statistic=570.00, p=0.464249
+    T-test (comparison): t=-1.13, p=0.459023
+    Mann-Whitney U: statistic=36142.00, p=0.325327
+    T-test (comparison): t=-1.59, p=0.114767
+    Mann-Whitney U: statistic=173236.00, p=0.000000
+    T-test (comparison): t=8.25, p=0.000000
+    Mann-Whitney U: statistic=328725.00, p=0.000777
+    T-test (comparison): t=-3.29, p=0.001023
+    Mann-Whitney U: statistic=32828.00, p=0.399297
+    T-test (comparison): t=-0.68, p=0.499060
+    Mann-Whitney U: statistic=1389.00, p=0.118508
+    T-test (comparison): t=4.07, p=0.146095
+    Mann-Whitney U: statistic=33263.00, p=0.030715
+    T-test (comparison): t=-1.95, p=0.053460
+    Mann-Whitney U: statistic=180600.00, p=0.000000
+    T-test (comparison): t=9.40, p=0.000000
+    Mann-Whitney U: statistic=351039.00, p=0.244631
+    T-test (comparison): t=-0.92, p=0.357054
+    Mann-Whitney U: statistic=34476.00, p=0.896575
+    T-test (comparison): t=0.23, p=0.816458
+    Mann-Whitney U: statistic=1329.00, p=0.172825
+    T-test (comparison): t=2.24, p=0.264707
+    Mann-Whitney U: statistic=32585.00, p=0.014770
+    T-test (comparison): t=-2.33, p=0.021438
+----------[INFO] Plotted deviation distributions
+----------[INFO] 
+================================================================================
+----------[INFO] REGIONAL DEVIATION ANALYSIS
+----------[INFO] ================================================================================
+
+
+[INFO] Starting regional deviation analysis...
+[INFO] ROI names formatted for plotting. Example: [V] Neurom (RightAccumbensArea)
+Merged CTT-SCHZ and CTT-MDD into single CTT group
+[INFO] Found 1194 regional z-score columns
+Analyzing group: MDD (n=328) vs HC (n=838)
+Analyzing group: SCHZ (n=866) vs HC (n=838)
+Analyzing group: CTT (n=83) vs HC (n=838)
+
+Regional heatmap created successfully!
+Shape: (50, 3)
+Saved to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232/figures/region_effect_heatmap_vs_HC.png
+
+Available datasets: ['IXI' 'SALD' 'SRBPS' 'DALLAS' 'NU' 'MCIC' 'TCP' 'COBRE' 'whiteCAT' 'EPSY'
+ 'NSS']
+Dataset categories: {'whiteCAT': ['whiteCAT'], 'NSS': ['NSS'], 'others': ['IXI', 'SALD', 'SRBPS', 'DALLAS', 'NU', 'MCIC', 'TCP', 'COBRE', 'EPSY']}
+Processing SCHZ (total n=866)
+  SCHZ-whiteCAT: n=70
+  SCHZ-NSS: n=105
+  SCHZ-others: n=691
+Processing MDD (total n=328)
+  MDD-whiteCAT: n=73
+  No NSS data for MDD
+  MDD-others: n=255
+Processing CTT (total n=83)
+  CTT-whiteCAT: n=71
+  CTT-NSS: n=12
+  No others data for CTT
+
+Dataset-split heatmap created successfully!
+Shape: (50, 7)
+Columns: ['SCHZ-whiteCAT', 'SCHZ-NSS', 'SCHZ-others', 'MDD-whiteCAT', 'MDD-others', 'CTT-whiteCAT', 'CTT-NSS']
+
+Data availability per column:
+  SCHZ-whiteCAT: 50/50 regions (100.0%)
+  SCHZ-NSS: 50/50 regions (100.0%)
+  SCHZ-others: 50/50 regions (100.0%)
+  MDD-whiteCAT: 50/50 regions (100.0%)
+  MDD-others: 50/50 regions (100.0%)
+  CTT-whiteCAT: 50/50 regions (100.0%)
+  CTT-NSS: 50/50 regions (100.0%)
+[INFO] Regional deviation analysis finished.
+----------[INFO] Saved regional effect sizes to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232/regional_effect_sizes_combined.csv
+----------[INFO] 
+Top 20 ROIs with largest Cliff's Delta:
+----------[INFO]                               ROI_Name Diagnosis  Cliffs_Delta  Significant_Bootstrap_p05_uncorrected
+            [T] Destrieux_rS (central)       CTT      0.504903                                   True
+                      [V] AAL3 (ltPuA)       CTT     -0.358484                                   True
+                     [V] IBSR (rVenDC)       CTT     -0.355925                                   True
+                       [V] AAL3 (rREC)       CTT      0.354890                                   True
+                    [V] AAL3 (lOFCmed)       CTT      0.349541                                   True
+           [V] Sch100_rLimbicB_OFC (1)       CTT      0.340512                                   True
+                    [V] lpba40 (lRecG)       CTT      0.333237                                   True
+      [V] Sch100_lLimbicA_TempPole (2)       CTT      0.331023                                   True
+          [T] Destrieux_lS_front (inf)       CTT      0.329154                                   True
+[T] Destrieux_lG_temp_sup_G_T (transv)       CTT     -0.328407                                   True
+                      [V] AAL3 (rtPuM)       CTT     -0.327429                                   True
+           [V] Sch200_rLimbicB_OFC (1)       CTT      0.325991                                   True
+                      [V] AAL3 (rtLGN)       CTT     -0.325848                                   True
+                      [V] AAL3 (rtMGN)       CTT     -0.312649                                   True
+           [V] Sch200_lLimbicB_OFC (2)       CTT      0.304655                                   True
+                     [V] AAL3 (RapheD)       CTT     -0.301866                                   True
+               [T] DK40 (rparacentral)       CTT      0.293240                                   True
+        [T] DK40 (ltransversetemporal)       CTT     -0.291773                                   True
+        [V] cobra (lSupPostCerebLVIIB)       CTT      0.288236                                   True
+        [T] Destrieux_lG (postcentral)       CTT      0.285390                                   True
+----------[INFO] 
+================================================================================
+----------[INFO] CORRELATION WITH CLINICAL VARIABLES
+----------[INFO] ================================================================================
+
+----------[INFO] 
+================================================================================
+----------[INFO] Visualizing latent space embeddings...
+----------[INFO] ================================================================================
+
+Generating embeddings...
+Computing UMAP projection...
+Creating visualization for column: Diagnosis
+Creating visualization for column: Dataset
+Creating visualization for column: Sex
+Saved visualization for 'Diagnosis'
+Saved visualization for 'Dataset'
+Saved visualization for 'Sex'
+----------[INFO] Saved latent space visualizations
+----------[INFO] 
+================================================================================
+----------[INFO] TESTING COMPLETE - SUMMARY
+----------[INFO] ================================================================================
+----------[INFO] Main output directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_all_columnwise_20251031_1334_20251031_145232
+----------[INFO] 
+Key outputs:
+----------[INFO]   - deviation_scores_combined.csv (includes ALL 5 deviation methods)
+----------[INFO]   - deviation_score_summary.csv
+----------[INFO]   - regional_effect_sizes_combined.csv
+----------[INFO] 
+Plots:
+----------[INFO]   Deviation distributions (figures/distributions/):
+----------[INFO]     - score_errorbar_ctt_combined.png (Bootstrap)
+----------[INFO]     - recon_errorbar_ctt_combined.png (Reconstruction)
+----------[INFO]     - kl_errorbar_ctt_combined.png (KL Divergence)
+----------[INFO]     - latent_aguila_errorbar_ctt_combined.png (Aguila method)
+----------[INFO]     - combined_errorbar_ctt_combined.png (Combined)
+----------[INFO]   Regional effect sizes (figures/):
+----------[INFO]     - paper_style_SCHZ_vs_HC.png
+----------[INFO]     - paper_style_MDD_vs_HC.png
+----------[INFO]     - paper_style_CTT_vs_HC.png
+----------[INFO]   Latent embeddings (figures/latent_embeddings/)
+----------[INFO] ================================================================================
+
+
+####################################################################################################
+
+session completed at 2025-10-31 20:33:31.563494.
+
+Configuration:
+    __module__:          utils.config_utils_model
+    __init__:            <function Config_2D.__init__ at 0x2b6b3fca8400>
+    __str__:             <function Config_2D.__str__ at 0x2b6b3fca84a0>
+    __dict__:            <attribute '__dict__' of 'Config_2D' objects>
+    __weakref__:         <attribute '__weakref__' of 'Config_2D' objects>
+    __doc__:             None
+
+
+
+    *      *  |    *
+      *      / \     * 
+    *    *  / _ \  *    *
+           |.o '.|  *
+      *    |'._.'|         done :) 
+         * |     |  *   *
+    *    ,'|  |  |`.   *
+         / |  |  |  \    *
+    *   |,-'--|--'-. |
+    
+    
+
+

@@ -427,30 +427,42 @@ def create_colored_jitter_plots(data, metadata_df, metric, summary_df, plot_orde
         create_color_summary_table(filtered_data, metric, color_col, current_plot_order, save_dir)
  
 def calculate_deviations(normative_models, data_tensor, norm_diagnosis, annotations_df, device="cuda", roi_names=None):
-   
-    # Calculate deviation scores using bootstrap models
-    # roi_names: Optional list of ROI names to use as column names instead of generic region_X
-
+    """
+    Calculate deviation scores using bootstrap models.
+    
+    CORRECTED VERSION: All normalization is now done RELATIVE TO HC (normative group)
+    
+    Args:
+        normative_models: List of trained VAE models
+        data_tensor: Tensor of clinical data (all subjects)
+        norm_diagnosis: Normative diagnosis group (e.g., 'HC')
+        annotations_df: DataFrame with metadata (Diagnosis, Age, Sex, etc.)
+        device: Computing device ('cuda' or 'cpu')
+        roi_names: Optional list of ROI names for column naming
+    
+    Returns:
+        results_df: DataFrame with deviation scores normalized relative to HC
+    """
+    
     total_models = len(normative_models)
     total_subjects = data_tensor.shape[0]
     
+    # ========== ALIGNMENT CHECK ==========
     if total_subjects != len(annotations_df):
         print(f"WARNING: Size mismatch detected: {total_subjects} samples in data tensor vs {len(annotations_df)} rows in annotations")
-    
-        # Get filenames in annotations_df
-        filenames = annotations_df["Filename"].tolist()
-        
-        # Create a new annotations_df with only rows that have matching data
         valid_indices = list(range(min(total_subjects, len(annotations_df))))
         aligned_annotations = annotations_df.iloc[valid_indices].reset_index(drop=True)
-      
         annotations_df = aligned_annotations
-
+        print(f"Aligned datasets - working with {len(annotations_df)} subjects")
+    
+    # ========== INITIALIZE ARRAYS ==========
     all_recon_errors = np.zeros((total_subjects, total_models))
     all_kl_divs = np.zeros((total_subjects, total_models))
     all_z_scores = np.zeros((total_subjects, data_tensor.shape[1], total_models))
     
-    # Process each model
+    # ========== PROCESS EACH BOOTSTRAP MODEL ==========
+    print(f"[INFO] Processing {total_models} bootstrap models...")
+    
     for i, model in enumerate(normative_models):
         model.eval()
         model.to(device)
@@ -458,99 +470,170 @@ def calculate_deviations(normative_models, data_tensor, norm_diagnosis, annotati
             batch_data = data_tensor.to(device)
             recon, mu, log_var = model(batch_data)
             
-            #--------------------------------------------CALCULATE RECONSTRUCTION ERROR ------------------------------------------------------------
-            # Mean squared error between original brain measurements and their reconstruction
-            # -> how well the normative model can reproduce he brain pattern
-            # -> Higher values indicate brain patterns deviating from normative expectations
+            # Reconstruction error (MSE per subject)
             recon_error = torch.mean((batch_data - recon) ** 2, dim=1).cpu().numpy()
             all_recon_errors[:, i] = recon_error
             
-            #------------------------------------------------CALCULATE KL DIVERGENCE ---------------------------------------------------------------
-            # -> divergence between the encoded distribution and N(0,1)
+            # KL divergence (per subject)
             kl_div = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1).cpu().numpy()
             all_kl_divs[:, i] = kl_div
             
-            #---------------------------------------------CALCULATE REGION-WISE-Z-SCORES ---------------------------------------------------------------
-            #does not get used anymore
+            # Region-wise squared errors (for later analysis)
             z_scores = ((batch_data - recon) ** 2).cpu().numpy()
             all_z_scores[:, :, i] = z_scores
         
         # Clear GPU memory
         torch.cuda.empty_cache()
     
-    # Average across bootstrap models
+    print(f"[INFO] Finished processing models")
+    
+    # ========== AVERAGE ACROSS BOOTSTRAP MODELS ==========
     mean_recon_error = np.mean(all_recon_errors, axis=1)
     std_recon_error = np.std(all_recon_errors, axis=1)
     mean_kl_div = np.mean(all_kl_divs, axis=1)
     std_kl_div = np.std(all_kl_divs, axis=1)
     
-    # Calculate region-wise mean z-scores
+    # Region-wise mean z-scores
     mean_region_z_scores = np.mean(all_z_scores, axis=2)
     
-    # Create result DataFrame with the properly aligned annotations
+    # ========== CREATE BASE DATAFRAME ==========
     results_df = annotations_df[["Filename", "Diagnosis", "Age", "Sex", "Dataset"]].copy()
-    
-    # Now these should be the same length
     results_df["reconstruction_error"] = mean_recon_error
     results_df["reconstruction_error_std"] = std_recon_error
     results_df["kl_divergence"] = mean_kl_div
     results_df["kl_divergence_std"] = std_kl_div
     
-    # ========== FIXED: Use ROI names if provided ==========
+    # ========== ADD REGION-WISE Z-SCORES ==========
     if roi_names is not None and len(roi_names) == mean_region_z_scores.shape[1]:
-        # Use actual ROI names
         print(f"[INFO] Using {len(roi_names)} ROI names for region columns")
         column_names = [f"{name}_z_score" for name in roi_names]
     else:
-        # Fallback to generic names
         if roi_names is not None:
             print(f"[WARNING] ROI names length ({len(roi_names)}) doesn't match features ({mean_region_z_scores.shape[1]})")
             print("[WARNING] Using generic region_X names instead")
         column_names = [f"region_{i}_z_score" for i in range(mean_region_z_scores.shape[1])]
     
-    # Create a DataFrame with the new columns
-    new_columns = pd.DataFrame(
-        mean_region_z_scores, 
-        columns=column_names
-    )
-
+    new_columns = pd.DataFrame(mean_region_z_scores, columns=column_names)
     results_df = pd.concat([results_df, new_columns], axis=1)
-
-    #-------------------------------------------- CALCULATE COMBINED DEVIATION SCORE ---------------------------------------------------------------
-    # Normalize both metrics to 0-1 range for easier interpretation
-    #Z-score normalization
-    scaler_recon = StandardScaler()
-    scaler_kl = StandardScaler()
     
-    z_norm_recon = scaler_recon.fit_transform(mean_recon_error.reshape(-1, 1)).flatten()
-    z_norm_kl = scaler_kl.fit_transform(mean_kl_div.reshape(-1, 1)).flatten()
+    # ========================================================================
+    # CORRECTED NORMALIZATION: RELATIVE TO HC (NORMATIVE GROUP)
+    # ========================================================================
+    
+    print(f"\n[INFO] Normalizing deviation scores relative to {norm_diagnosis}...")
+    
+    # Identify HC subjects
+    hc_mask = annotations_df["Diagnosis"] == norm_diagnosis
+    n_hc = hc_mask.sum()
+    
+    if n_hc == 0:
+        print(f"[ERROR] No subjects found with diagnosis '{norm_diagnosis}'!")
+        print(f"[ERROR] Available diagnoses: {annotations_df['Diagnosis'].unique()}")
+        raise ValueError(f"Normative diagnosis '{norm_diagnosis}' not found in data")
+    
+    print(f"[INFO] Found {n_hc} {norm_diagnosis} subjects for normalization reference")
+    
+    # Extract HC statistics
+    hc_recon = mean_recon_error[hc_mask]
+    hc_kl = mean_kl_div[hc_mask]
+    
+    recon_mean_hc = np.mean(hc_recon)
+    recon_std_hc = np.std(hc_recon)
+    kl_mean_hc = np.mean(hc_kl)
+    kl_std_hc = np.std(hc_kl)
+    
+    print(f"[INFO] HC Reconstruction Error: mean={recon_mean_hc:.6f}, std={recon_std_hc:.6f}")
+    print(f"[INFO] HC KL Divergence: mean={kl_mean_hc:.6f}, std={kl_std_hc:.6f}")
+    
+    # ========== METHOD 1: Z-SCORE NORMALIZATION (RELATIVE TO HC) ==========
+    # Formula: (x - mean_HC) / std_HC
+    # HC subjects will have mean ≈ 0, std ≈ 1
+    # Patient groups show their true deviation from HC in standard deviations
+    
+    z_norm_recon = (mean_recon_error - recon_mean_hc) / (recon_std_hc + 1e-8)
+    z_norm_kl = (mean_kl_div - kl_mean_hc) / (kl_std_hc + 1e-8)
     
     # Combined deviation score (Z-score based)
     results_df["deviation_score_zscore"] = (z_norm_recon + z_norm_kl) / 2
     
-    #Percentile-based scoring
-    recon_percentiles = stats.rankdata(mean_recon_error) / len(mean_recon_error)
-    kl_percentiles = stats.rankdata(mean_kl_div) / len(mean_kl_div)
+    print(f"[INFO] Z-Score normalization complete")
+    print(f"       HC mean deviation_score_zscore: {results_df[hc_mask]['deviation_score_zscore'].mean():.3f}")
+    print(f"       HC std deviation_score_zscore: {results_df[hc_mask]['deviation_score_zscore'].std():.3f}")
+    
+    # ========== METHOD 2: PERCENTILE-BASED SCORING (RELATIVE TO HC) ==========
+    # Each patient's score is their percentile rank within the HC distribution
+    # HC subjects will be uniformly distributed between 0-1
+    # Patients exceeding HC range will be >1.0
+    
+    from scipy import stats as scipy_stats
+    
+    recon_percentiles = np.array([
+        scipy_stats.percentileofscore(hc_recon, x, kind='rank') / 100 
+        for x in mean_recon_error
+    ])
+    kl_percentiles = np.array([
+        scipy_stats.percentileofscore(hc_kl, x, kind='rank') / 100 
+        for x in mean_kl_div
+    ])
+    
     results_df["deviation_score_percentile"] = (recon_percentiles + kl_percentiles) / 2
     
-    #Original min-max
-    min_recon = results_df["reconstruction_error"].min()
-    max_recon = results_df["reconstruction_error"].max()
-    norm_recon = (results_df["reconstruction_error"] - min_recon) / (max_recon - min_recon)
+    print(f"[INFO] Percentile normalization complete")
+    print(f"       HC median percentile: {results_df[hc_mask]['deviation_score_percentile'].median():.3f}")
     
-    min_kl = results_df["kl_divergence"].min()
-    max_kl = results_df["kl_divergence"].max()
-    norm_kl = (results_df["kl_divergence"] - min_kl) / (max_kl - min_kl)
+    # ========== METHOD 3: ROBUST MIN-MAX (RELATIVE TO HC RANGE) ==========
+    # Normalize to [0, 1] based on HC range
+    # Values below HC min → 0
+    # Values above HC max → 1
+    # HC subjects → spread between 0 and 1
     
-    # Combined deviation score (equal weighting of both metrics)
+    # Use percentiles for robustness (5th and 95th)
+    min_recon_hc = np.percentile(hc_recon, 5)
+    max_recon_hc = np.percentile(hc_recon, 95)
+    min_kl_hc = np.percentile(hc_kl, 5)
+    max_kl_hc = np.percentile(hc_kl, 95)
+    
+    print(f"[INFO] HC Recon range (5th-95th percentile): [{min_recon_hc:.6f}, {max_recon_hc:.6f}]")
+    print(f"[INFO] HC KL range (5th-95th percentile): [{min_kl_hc:.6f}, {max_kl_hc:.6f}]")
+    
+    # Clip and normalize
+    norm_recon = np.clip(mean_recon_error, min_recon_hc, max_recon_hc)
+    norm_recon = (norm_recon - min_recon_hc) / (max_recon_hc - min_recon_hc + 1e-8)
+    
+    norm_kl = np.clip(mean_kl_div, min_kl_hc, max_kl_hc)
+    norm_kl = (norm_kl - min_kl_hc) / (max_kl_hc - min_kl_hc + 1e-8)
+    
+    # Combined deviation score (Min-Max based) - THIS IS THE MAIN SCORE
     results_df["deviation_score"] = (norm_recon + norm_kl) / 2
-
+    
+    print(f"[INFO] Min-Max normalization complete")
+    print(f"       HC mean deviation_score: {results_df[hc_mask]['deviation_score'].mean():.3f}")
+    print(f"       HC std deviation_score: {results_df[hc_mask]['deviation_score'].std():.3f}")
+    
+    # ========== SUMMARY STATISTICS ==========
+    print(f"\n[INFO] Deviation Score Summary by Diagnosis:")
+    print("="*60)
+    
+    for diagnosis in sorted(results_df["Diagnosis"].unique()):
+        diag_mask = results_df["Diagnosis"] == diagnosis
+        n = diag_mask.sum()
+        
+        mean_score = results_df[diag_mask]["deviation_score"].mean()
+        std_score = results_df[diag_mask]["deviation_score"].std()
+        
+        mean_zscore = results_df[diag_mask]["deviation_score_zscore"].mean()
+        std_zscore = results_df[diag_mask]["deviation_score_zscore"].std()
+        
+        print(f"{diagnosis:10s} (n={n:3d}): "
+              f"score={mean_score:.3f}±{std_score:.3f}, "
+              f"zscore={mean_zscore:.3f}±{std_zscore:.3f}")
+    
+    print("="*60)
+    print(f"[INFO] Deviation calculation complete!\n")
+    
     return results_df
 
-"""
-PATCH 2: Add these NEW FUNCTIONS to your testing script
-Insert BEFORE def main()
-"""
+
 """
 PATCH 7: Add to dev_scores_utils.py
 
@@ -721,6 +804,199 @@ def compute_hc_latent_stats(model, hc_data, device='cuda'):
         'mean': hc_mean.cpu().numpy(),
         'std': hc_std.cpu().numpy()
     }
+
+def plot_all_deviation_metrics_errorbar(results_df, save_dir, norm_diagnosis='HC', 
+                                        custom_colors=None, name="Analysis"):
+    """
+    Create errorbar plots for ALL deviation metrics - BOTH mean AND median.
+    Creates 10 plots total (5 metrics × 2 statistics).
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    from scipy import stats as scipy_stats
+    
+    # Default colors
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A",
+            "SCHZ": "#3E885B",
+            "MDD": "#BEDCFE",
+            "CTT": "#2F4B26",
+            "CTT-SCHZ": "#A67DB8",
+            "CTT-MDD": "#160C28"
+        }
+    
+    # Find all deviation columns
+    deviation_columns = [col for col in results_df.columns if col.startswith('deviation_')]
+    
+    # Nice labels for plots
+    label_map = {
+        'deviation_score': 'Bootstrap Deviation Score',
+        'deviation_score_recon': 'Reconstruction Error (D_MSE)',
+        'deviation_score_kl': 'KL Divergence (D_KL)',
+        'deviation_score_latent_aguila': 'Latent Deviation (D_L - Aguila)',
+        'deviation_score_combined': 'Combined Deviation Score'
+    }
+    
+    
+    # ========== FILTER TO 4 MAIN DIAGNOSES ==========
+    # Keep only HC, MDD, SCHZ, CTT
+    keep_diagnoses = ['HC', 'MDD', 'SCHZ', 'CTT']
+
+    # First merge CTT-SCHZ and CTT-MDD into CTT
+    results_df_filtered = results_df.copy()
+    results_df_filtered.loc[results_df_filtered['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+
+    # Then filter to only keep the 4 main diagnoses
+    results_df_filtered = results_df_filtered[results_df_filtered['Diagnosis'].isin(keep_diagnoses)]
+
+    # Determine diagnosis order from filtered data
+    available_diagnoses = results_df_filtered['Diagnosis'].unique()
+
+    
+    if norm_diagnosis in available_diagnoses:
+        diagnosis_order = [norm_diagnosis] + [d for d in available_diagnoses if d != norm_diagnosis]
+    else:
+        diagnosis_order = list(available_diagnoses)
+    
+    # Reverse for bottom-to-top plotting
+    diagnosis_order_plot = diagnosis_order[::-1]
+    
+    print(f"\n[INFO] Creating errorbar plots (mean + median) for {len(deviation_columns)} deviation metrics...")
+    print(f"       Total plots to create: {len(deviation_columns) * 2}")
+    
+    # ========== LOOP OVER BOTH STATISTICS ==========
+    for statistic in ['mean', 'median']:
+        
+        print(f"\n[INFO] Creating {statistic.upper()} plots...")
+        
+        for dev_col in deviation_columns:
+            if dev_col not in results_df_filtered.columns:
+                print(f"[WARNING] Column {dev_col} not found, skipping")
+                continue
+            
+            # Calculate summary statistics
+            if statistic == 'mean':
+                summary_df = (
+                    results_df_filtered
+                    .groupby("Diagnosis")[dev_col]
+                    .agg(['mean', 'std', 'count'])
+                    .reset_index()
+                )
+                summary_df.rename(columns={'mean': 'center'}, inplace=True)
+                # Calculate SEM for error bars
+                summary_df["error"] = summary_df["std"] / np.sqrt(summary_df["count"])
+            else:  # median
+                summary_df = (
+                    results_df_filtered
+                    .groupby("Diagnosis")[dev_col]
+                    .agg(['median', 'count'])
+                    .reset_index()
+                )
+                summary_df.rename(columns={'median': 'center'}, inplace=True)
+                # Calculate IQR for error bars (Q1 to Q3)
+                q1 = results_df_filtered.groupby("Diagnosis")[dev_col].quantile(0.25)
+                q3 = results_df_filtered.groupby("Diagnosis")[dev_col].quantile(0.75)
+                summary_df["error_low"] = summary_df["center"] - q1.values
+                summary_df["error_high"] = q3.values - summary_df["center"]
+            
+            # Calculate p-values vs norm diagnosis
+            if norm_diagnosis in available_diagnoses:
+                norm_data = results_df_filtered[results_df_filtered["Diagnosis"] == norm_diagnosis][dev_col].values
+                
+                p_values = []
+                for diagnosis in summary_df["Diagnosis"]:
+                    if diagnosis == norm_diagnosis:
+                        p_values.append(np.nan)
+                    else:
+                        diag_data = results_df_filtered[results_df_filtered["Diagnosis"] == diagnosis][dev_col].values
+                        if len(diag_data) > 0:
+                            _, p_val = scipy_stats.mannwhitneyu(
+                                diag_data, norm_data, alternative='two-sided'
+                            )
+                            p_values.append(p_val)
+                        else:
+                            p_values.append(np.nan)
+                
+                summary_df["p_value"] = p_values
+            else:
+                summary_df["p_value"] = np.nan
+            
+            # Sort in plot order
+            summary_df["Diagnosis"] = pd.Categorical(
+                summary_df["Diagnosis"], 
+                categories=diagnosis_order_plot, 
+                ordered=True
+            )
+            summary_df = summary_df.sort_values("Diagnosis")
+            
+            # Create plot
+            plt.figure(figsize=(8, 6))
+            
+            # Errorbar plot
+            if statistic == 'mean':
+                plt.errorbar(
+                    summary_df["center"], 
+                    summary_df["Diagnosis"],
+                    xerr=summary_df["error"],
+                    fmt='s', 
+                    color='black', 
+                    capsize=5, 
+                    markersize=8
+                )
+            else:  # median with asymmetric error bars
+                plt.errorbar(
+                    summary_df["center"], 
+                    summary_df["Diagnosis"],
+                    xerr=[summary_df["error_low"], summary_df["error_high"]],
+                    fmt='D',  # Diamond for median
+                    color='black', 
+                    capsize=5, 
+                    markersize=8
+                )
+            
+            # Add colored scatter with p-value coloring
+            p_values_for_color = summary_df["p_value"].fillna(0.5)
+            scatter = plt.scatter(
+                summary_df["center"], 
+                summary_df["Diagnosis"],
+                c=p_values_for_color, 
+                cmap='RdYlBu_r',
+                s=100, 
+                alpha=0.7, 
+                edgecolors='black',
+                vmin=0,
+                vmax=0.1
+            )
+            
+            # Add colorbar
+            cbar = plt.colorbar(scatter)
+            cbar.set_label('p-value', rotation=270, labelpad=15)
+            
+            # Labels and title
+            nice_label = label_map.get(dev_col, dev_col.replace('_', ' ').title())
+            stat_label = "Mean ± SEM" if statistic == 'mean' else "Median (IQR)"
+            plt.title(f"{stat_label} | Norm: {norm_diagnosis}\n{name}", fontsize=14)
+            plt.xlabel(f"{nice_label}", fontsize=12)
+            plt.ylabel("Diagnosis", fontsize=12)
+            plt.grid(True, alpha=0.3, axis='x')
+            
+            plt.tight_layout()
+            
+            # Save
+            metric_name = dev_col.replace('deviation_score_', '').replace('deviation_score', 'score')
+            filename = f"{metric_name}_errorbar_{statistic}_ctt_combined.png"
+            save_path = f"{save_dir}/figures/distributions/{filename}"
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"  ✓ Created: {filename}")
+    
+    print(f"\n[INFO] All {len(deviation_columns) * 2} errorbar plots created!")
+    print(f"       - {len(deviation_columns)} MEAN plots (error bars = SEM)")
+    print(f"       - {len(deviation_columns)} MEDIAN plots (error bars = IQR)")
+
 
 
 def create_paper_style_boxplots(deviation_df, save_dir, norm_diagnosis='HC'):
@@ -1408,7 +1684,7 @@ def get_atlas_abbreviations():
         "thalamic_nuclei": "[TN]",
         "thalamus": "[T]",
         "aal3": "[A]",
-        "": "[AAL3]",
+        "AAL3": "[AAL3]",
         "ibsr": "[I]",
         "IBSR": "[I]",
         "schaefer100": "[S100]",
@@ -1422,42 +1698,62 @@ def get_atlas_abbreviations():
     }
 
 def format_roi_name_for_plotting(original_roi_name: str, atlas_name_from_config: str | List[str] = None) -> str:
+    """
+    Format ROI name for plotting.
     
-    #Formatiert einen ROI-Namen im Plotting-Format: [Atlas-Abkürzung] ROI-Name (VolumeType)
-    atlas_abbreviations = get_atlas_abbreviations()
-
+    NEW FORMAT: [V] RightHippocampus (Neurom)
+    
+    Args:
+        original_roi_name: e.g., "Vgm_Neurom_RightHippocampus"
+        atlas_name_from_config: Atlas name(s) from config
+    
+    Returns:
+        Formatted string: "[V] RightHippocampus (Neurom)"
+    """
+    
+    atlas_abbreviations = {
+        "cobra": "[C]",
+        "lpba40": "[L]",
+        "neuromorphometrics": "[N]",
+        "Neurom": "[N]",
+        "suit": "[S]",
+        "SUIT": "[S]",
+        "thalamic_nuclei": "[TN]",
+        "thalamus": "[T]",
+        "aal3": "[A]",
+        "AAL3": "[AAL3]",
+        "ibsr": "[I]",
+        "IBSR": "[I]",
+        "schaefer100": "[S100]",
+        "Sch100": "[S100]",
+        "schaefer200": "[S200]",
+        "Sch200": "[S200]",
+        "aparc_dk40": "[DK]",
+        "DK40": "[DK]",
+        "aparc_destrieux": "[DES]",
+        "Destrieux": "[DES]",      
+    }
+    
+    # Split the original name
     parts = original_roi_name.split('_')
     
-    if len(parts) < 3: 
-        
-        return original_roi_name 
-
-    volume_type = parts[-1] 
+    if len(parts) < 3:
+        return original_roi_name
     
-    detected_atlas_prefix = parts[0]
-    roi_name = "_".join(parts[1:-1])
-    current_atlas_for_lookup = None
-    if isinstance(atlas_name_from_config, str):
-        
-        current_atlas_for_lookup = atlas_name_from_config
-    elif isinstance(atlas_name_from_config, list):
+    # Extract components
+    volume_type = parts[0]           # e.g., "Vgm", "G", "T"
+    atlas_prefix = parts[1]          # e.g., "Neurom", "DK40", "lpba40"
+    roi_name = "_".join(parts[2:])   # e.g., "RightHippocampus" or "Left_Amygdala"
     
-        for full_atlas_name, abbr in atlas_abbreviations.items():
-            if full_atlas_name.startswith(detected_atlas_prefix):
-                current_atlas_for_lookup = full_atlas_name
-                break
-        if current_atlas_for_lookup is None:
-            
-            current_atlas_for_lookup = detected_atlas_prefix
+    # Get volume type abbreviation
+    if volume_type.startswith('V'):
+        vtype_abbr = f"[{volume_type[1:].upper()}]"  # Vgm → [GM]
     else:
-        
-        current_atlas_for_lookup = detected_atlas_prefix 
-
-  
-    atlas_abbr = atlas_abbreviations.get(current_atlas_for_lookup, f"[{detected_atlas_prefix[:1].upper()}]")
+        vtype_abbr = f"[{volume_type}]"              # G → [G], T → [T]
     
-   
-    return f"{atlas_abbr} {roi_name} ({volume_type})"
+    # ========== NEW FORMAT ==========
+    # [V] RightHippocampus (Neurom)
+    return f"{vtype_abbr} {roi_name} ({atlas_prefix})"
 
 def format_roi_names_list_for_plotting(roi_names_list: List[str], atlas_name_from_config: str | List[str] = None) -> List[str]:
     return [format_roi_name_for_plotting(name, atlas_name_from_config) for name in roi_names_list]
@@ -1527,488 +1823,495 @@ def analyze_regional_deviations(
         high_low_thresholds=None,
         merge_ctt_groups=True
     ):
-        print("\n[INFO] Starting regional deviation analysis...")
+    """
+    Modified version with:
+    - Heatmap 1: Top 30 CTT-affected regions (3 diagnoses)
+    - Heatmap 2: Top 30 overall-affected regions (3 diagnoses)
+    - Paper-style plots: Top 16 per diagnosis
+    """
+    
+    print("\n[INFO] Starting MODIFIED regional deviation analysis...")
+    
+    # Import required libraries
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from typing import List
+    import os
+    
+    # Helper functions for ROI naming (same as before)
+    def get_atlas_abbreviations_local():
+        return {
+            "cobra": "[C]",
+            "lpba40": "[L]",
+            "neuromorphometrics": "[N]",
+            "suit": "[S]",
+            "thalamic_nuclei": "[TN]",
+            "thalamus": "[T]",
+        }
 
-        def get_atlas_abbreviations_local():
-            return {
-                "cobra": "[C]",
-                "lpba40": "[L]",
-                "neuromorphometrics": "[N]",
-                "suit": "[S]",
-                "thalamic_nuclei": "[TN]",
-                "thalamus": "[T]",
-            }
-
-        def format_roi_name_for_plotting_local(original_roi_name: str, atlas_name_from_config: str | List[str] = None) -> str:
-            atlas_abbreviations = get_atlas_abbreviations_local()
-            parts = original_roi_name.split('_')
-
-            if len(parts) < 3:
-                return original_roi_name
-
-            volume_type_part = parts[-1]
-            detected_atlas_prefix = parts[0]
-            roi_name_core = "_".join(parts[1:-1])
-
-            current_atlas_for_lookup = None
-            if isinstance(atlas_name_from_config, str):
-                current_atlas_for_lookup = atlas_name_from_config
-            elif isinstance(atlas_name_from_config, list):
-                for full_atlas_name, abbr in atlas_abbreviations.items():
-                    if full_atlas_name.startswith(detected_atlas_prefix):
-                        current_atlas_for_lookup = full_atlas_name
-                        break
-                if current_atlas_for_lookup is None:
-                    current_atlas_for_lookup = detected_atlas_prefix
-            else:
-                current_atlas_for_lookup = detected_atlas_prefix
-
-            atlas_abbr = atlas_abbreviations.get(current_atlas_for_lookup, f"[{detected_atlas_prefix[:1].upper()}]")
-
-            return f"{atlas_abbr} {roi_name_core} ({volume_type_part})"
-
-        def format_roi_names_list_for_plotting_local(roi_names_list: List[str], atlas_name_from_config: str | List[str] = None) -> List[str]:
-            return [format_roi_name_for_plotting_local(name, atlas_name_from_config) for name in roi_names_list]
-
-        # Parameter für Bootstrapping
-        NUM_BOOTSTRAPS = 800
-        CI_LEVEL = 0.95
-
-        if roi_names is not None:
-            formatted_roi_names_for_plotting = format_roi_names_list_for_plotting_local(roi_names, atlas_name_from_config=atlas_name)
-            print(f"[INFO] ROI names formatted for plotting. Example: {formatted_roi_names_for_plotting[0]}")
-        else:
-            print("[WARNING] No ROI names provided to analyze_regional_deviations, using generic region_X labels.")
-            region_cols_from_df = [col for col in results_df.columns if col.endswith("_z_score")]
-            formatted_roi_names_for_plotting = [f"Region_{i+1}" for i in range(len(region_cols_from_df))]
-
-
-        if merge_ctt_groups:
-            results_df = results_df.copy()
-            results_df.loc[results_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
-            print("Merged CTT-SCHZ and CTT-MDD into single CTT group")
-
-        # ============ FIXED: Look for columns ending with _z_score ============
-        # This works with the new ROI naming scheme where columns are named like:
-        # "Vgm_Neurom_LeftHippocampus_z_score" instead of "region_0_z_score"
-        region_cols = [col for col in results_df.columns if col.endswith("_z_score")]
+    def format_roi_name_for_plotting_local(original_roi_name: str, atlas_name_from_config: str | List[str] = None) -> str:
+        """
+        Format ROI name for plotting.
+        NEW FORMAT: [V] RightHippocampus (Neurom)
+        """
         
-        print(f"[INFO] Found {len(region_cols)} regional z-score columns")
-
-        if len(formatted_roi_names_for_plotting) != len(region_cols):
-            print(f"[WARNING] Number of FORMATTED ROI names ({len(formatted_roi_names_for_plotting)}) does not match number of region columns ({len(region_cols)}).")
-            print(f"[INFO] Using column names directly (they already contain ROI information)")
-            # Use the actual column names (which already have ROI names in them)
-            roi_mapping_for_internal = {col: col for col in region_cols}
-            # For plotting, remove the _z_score suffix to get readable names
-            formatted_roi_names_for_plotting = [col.replace("_z_score", "") for col in region_cols]
+        atlas_abbreviations = {
+            "cobra": "[C]",
+            "lpba40": "[L]",
+            "neuromorphometrics": "[N]",
+            "Neurom": "[N]",
+            "suit": "[S]",
+            "SUIT": "[S]",
+            "thalamic_nuclei": "[TN]",
+            "thalamus": "[T]",
+            "aal3": "[A]",
+            "AAL3": "[AAL3]",
+            "ibsr": "[I]",
+            "IBSR": "[I]",
+            "schaefer100": "[S100]",
+            "Sch100": "[S100]",
+            "schaefer200": "[S200]",
+            "Sch200": "[S200]",
+            "aparc_dk40": "[DK]",
+            "DK40": "[DK]",
+            "aparc_destrieux": "[DES]",
+            "Destrieux": "[DES]",
+        }
+        
+        # Split the original name
+        parts = original_roi_name.split('_')
+        
+        if len(parts) < 3:
+            # If format is unexpected, return as-is
+            return original_roi_name
+        
+        # Extract components
+        volume_type = parts[0]      # e.g., "Vgm", "G", "T"
+        atlas_prefix = parts[1]     # e.g., "Neurom", "DK40", "lpba40"
+        roi_name = "_".join(parts[2:])  # e.g., "RightHippocampus" or "Left_Amygdala"
+        
+        # Get volume type abbreviation
+        if volume_type.startswith('V'):
+            # Vgm → [GM], Vwm → [WM], Vcsf → [CSF]
+            vtype_abbr = f"[{volume_type[1:].upper()}]"
         else:
-            roi_mapping_for_internal = dict(zip(region_cols, formatted_roi_names_for_plotting))
+            # G → [G], T → [T]
+            vtype_abbr = f"[{volume_type}]"
+        
+        # ========== NEW FORMAT ==========
+        # [V] RightHippocampus (Neurom)
+        # NOT: [V] Neurom (RightHippocampus)
+        return f"{vtype_abbr} {roi_name} ({atlas_prefix})"
 
-        named_results_df = results_df.copy()
-        named_results_df.rename(columns=roi_mapping_for_internal, inplace=True)
+    def format_roi_names_list_for_plotting_local(roi_names_list: List[str], atlas_name_from_config: str | List[str] = None) -> List[str]:
+        return [format_roi_name_for_plotting_local(name, atlas_name_from_config) for name in roi_names_list]
 
+    # Bootstrap parameters
+    NUM_BOOTSTRAPS = 800
+    CI_LEVEL = 0.95
 
-        diagnoses = results_df["Diagnosis"].unique()
-        norm_data = results_df[results_df["Diagnosis"] == norm_diagnosis]
+    # Format ROI names
+    if roi_names is not None:
+        formatted_roi_names_for_plotting = format_roi_names_list_for_plotting_local(roi_names, atlas_name_from_config=atlas_name)
+        print(f"[INFO] ROI names formatted for plotting. Example: {formatted_roi_names_for_plotting[0]}")
+    else:
+        print("[WARNING] No ROI names provided, using generic region_X labels.")
+        region_cols_from_df = [col for col in results_df.columns if col.endswith("_z_score")]
+        formatted_roi_names_for_plotting = [f"Region_{i+1}" for i in range(len(region_cols_from_df))]
 
-        if len(norm_data) == 0:
-            print(f"Warning: No data found for normative diagnosis '{norm_diagnosis}'. Cannot calculate comparisons.")
-            return pd.DataFrame()
+    # Merge CTT groups if requested
+    if merge_ctt_groups:
+        results_df = results_df.copy()
+        results_df.loc[results_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+        print("[INFO] Merged CTT-SCHZ and CTT-MDD into single CTT group")
+    
+    # ========== FILTER TO 4 MAIN DIAGNOSES ==========
+    keep_diagnoses = ['HC', 'MDD', 'SCHZ', 'CTT']
+    results_df = results_df[results_df['Diagnosis'].isin(keep_diagnoses)].copy()
+    print(f"[INFO] Filtered to 4 main diagnoses: {keep_diagnoses}")
+    print(f"[INFO] Sample sizes after filtering:")
+    for diag in keep_diagnoses:
+        n = (results_df['Diagnosis'] == diag).sum()
+        if n > 0:
+            print(f"       {diag}: {n}")
 
-        effect_sizes = []
+    # Find region columns
+    region_cols = [col for col in results_df.columns if col.endswith("_z_score")]
+    print(f"[INFO] Found {len(region_cols)} regional z-score columns")
 
-        catatonia_subgroups = {}
-        if add_catatonia_subgroups and metadata_path and subgroup_columns:
-            try:
-                metadata_df = pd.read_csv(metadata_path)
-                if 'Diagnosis' in metadata_df.columns and merge_ctt_groups:
-                    metadata_df.loc[metadata_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+    if len(formatted_roi_names_for_plotting) != len(region_cols):
+        print(f"[WARNING] ROI name count mismatch. Using column names directly.")
+        roi_mapping_for_internal = {col: col for col in region_cols}
+        formatted_roi_names_for_plotting = [col.replace("_z_score", "") for col in region_cols]
+    else:
+        roi_mapping_for_internal = dict(zip(region_cols, formatted_roi_names_for_plotting))
 
-                catatonia_subgroups = create_catatonia_subgroups(
-                    results_df, metadata_df, subgroup_columns,
-                    high_low_thresholds
-                )
-            except Exception as e:
-                print(f"Error loading metadata or creating subgroups: {e}")
+    named_results_df = results_df.copy()
+    named_results_df.rename(columns=roi_mapping_for_internal, inplace=True)
 
-        # Allgemeine Funktion zur Verarbeitung von Diagnosegruppen und Subgruppen
-        def process_group(group_name, group_data):
-            nonlocal effect_sizes # Declare effect_sizes as nonlocal to modify the outer scope list
+    # Get diagnoses and norm data
+    diagnoses = results_df["Diagnosis"].unique()
+    norm_data = results_df[results_df["Diagnosis"] == norm_diagnosis]
 
-            if len(group_data) == 0:
-                print(f"No data found for group: {group_name}")
-                return
+    if len(norm_data) == 0:
+        print(f"[ERROR] No data found for normative diagnosis '{norm_diagnosis}'")
+        return pd.DataFrame()
 
-            print(f"Analyzing group: {group_name} (n={len(group_data)}) vs {norm_diagnosis} (n={len(norm_data)})")
+    effect_sizes = []
 
-            for i, region_col in enumerate(region_cols):
-                roi_name_for_output = formatted_roi_names_for_plotting[i] if i < len(formatted_roi_names_for_plotting) else f"Region_{i+1}"
+    # Catatonia subgroups (if requested)
+    catatonia_subgroups = {}
+    if add_catatonia_subgroups and metadata_path and subgroup_columns:
+        try:
+            from utils.dev_scores_utils import create_catatonia_subgroups
+            metadata_df = pd.read_csv(metadata_path)
+            if 'Diagnosis' in metadata_df.columns and merge_ctt_groups:
+                metadata_df.loc[metadata_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
 
-                group_region_values = group_data[region_col].values
-                norm_region_values = norm_data[region_col].values
+            catatonia_subgroups = create_catatonia_subgroups(
+                results_df, metadata_df, subgroup_columns, high_low_thresholds
+            )
+        except Exception as e:
+            print(f"[WARNING] Could not create catatonia subgroups: {e}")
 
-                if len(group_region_values) == 0 or len(norm_region_values) == 0:
-                    continue
+    # Helper function to process groups
+    def process_group(group_name, group_data):
+        nonlocal effect_sizes
+        
+        if len(group_data) == 0:
+            print(f"[WARNING] No data for group: {group_name}")
+            return
 
-                group_mean = np.mean(group_region_values)
-                group_std = np.std(group_region_values)
-                norm_mean = np.mean(norm_region_values)
-                norm_std = np.std(norm_region_values)
+        print(f"[INFO] Analyzing {group_name} (n={len(group_data)}) vs {norm_diagnosis} (n={len(norm_data)})")
 
-                mean_diff = group_mean - norm_mean
-                cliff_delta = calculate_cliffs_delta(group_region_values, norm_region_values)
+        for i, region_col in enumerate(region_cols):
+            roi_name_for_output = formatted_roi_names_for_plotting[i] if i < len(formatted_roi_names_for_plotting) else f"Region_{i+1}"
 
-                cliff_delta_ci_low, cliff_delta_ci_high, p_val_from_bootstrap = bootstrap_cliffs_delta_ci(
-                    group_region_values, norm_region_values, num_bootstraps=NUM_BOOTSTRAPS, ci_level=CI_LEVEL
-                )
+            group_region_values = group_data[region_col].values
+            norm_region_values = norm_data[region_col].values
 
-                is_significant_p05_uncorrected = False
-                if not pd.isna(cliff_delta_ci_low) and not pd.isna(cliff_delta_ci_high):
-                    # Signifikanz basiert auf dem CI (ob es 0 überlappt)
-                    if (cliff_delta_ci_low > 0) or (cliff_delta_ci_high < 0):
-                        is_significant_p05_uncorrected = True
+            if len(group_region_values) == 0 or len(norm_region_values) == 0:
+                continue
 
-                pooled_std = np.sqrt(((len(group_region_values) - 1) * group_std**2 +
-                                    (len(norm_region_values) - 1) * norm_std**2) /
-                                    (len(group_region_values) + len(norm_region_values) - 2))
+            group_mean = np.mean(group_region_values)
+            group_std = np.std(group_region_values)
+            norm_mean = np.mean(norm_region_values)
+            norm_std = np.std(norm_region_values)
 
-                cohens_d = mean_diff / pooled_std if pooled_std != 0 else 0
+            mean_diff = group_mean - norm_mean
+            
+            # Import calculate_cliffs_delta and bootstrap_cliffs_delta_ci from utils
+            from utils.dev_scores_utils import calculate_cliffs_delta, bootstrap_cliffs_delta_ci
+            
+            cliff_delta = calculate_cliffs_delta(group_region_values, norm_region_values)
 
-                effect_sizes.append({
-                    "Diagnosis": group_name,
-                    "Vs_Norm_Diagnosis": norm_diagnosis,
-                    "Region_Column": region_col,
-                    "ROI_Name": roi_name_for_output,
-                    "Diagnosis_Mean": group_mean,
-                    "Diagnosis_Std": group_std,
-                    "Norm_Mean": norm_mean,
-                    "Norm_Std": norm_std,
-                    "Mean_Difference": mean_diff,
-                    "Cliffs_Delta": cliff_delta,
-                    "Cliffs_Delta_CI_Low": cliff_delta_ci_low,
-                    "Cliffs_Delta_CI_High": cliff_delta_ci_high,
-                    "Cohens_D": cohens_d,
-                    "N_Group": len(group_region_values),
-                    "N_Norm": len(norm_region_values),
-                    "Significant_Bootstrap_p05_uncorrected": is_significant_p05_uncorrected,
-                    "P_Value_Uncorrected": p_val_from_bootstrap
-                })
+            cliff_delta_ci_low, cliff_delta_ci_high, p_val_from_bootstrap = bootstrap_cliffs_delta_ci(
+                group_region_values, norm_region_values, num_bootstraps=NUM_BOOTSTRAPS, ci_level=CI_LEVEL
+            )
 
-        # Hauptdiagnosen verarbeiten
-        diagnoses = [d for d in diagnoses if d != norm_diagnosis]
+            is_significant_p05_uncorrected = False
+            if not pd.isna(cliff_delta_ci_low) and not pd.isna(cliff_delta_ci_high):
+                if (cliff_delta_ci_low > 0) or (cliff_delta_ci_high < 0):
+                    is_significant_p05_uncorrected = True
 
-        if merge_ctt_groups:
-            main_diagnoses = [d for d in diagnoses if d in ['SCHZ', 'MDD', 'CTT']]
-        else:
-            main_diagnoses = diagnoses
+            pooled_std = np.sqrt(((len(group_region_values) - 1) * group_std**2 +
+                                (len(norm_region_values) - 1) * norm_std**2) /
+                                (len(group_region_values) + len(norm_region_values) - 2))
 
-        for diagnosis in main_diagnoses:
-            diagnosis_data = results_df[results_df["Diagnosis"] == diagnosis]
-            process_group(diagnosis, diagnosis_data)
+            cohens_d = mean_diff / pooled_std if pooled_std != 0 else 0
 
-        # Catatonia subgroups verarbeiten
-        for subgroup_name, subgroup_data in catatonia_subgroups.items():
-            process_group(subgroup_name, subgroup_data)
+            effect_sizes.append({
+                "Diagnosis": group_name,
+                "Vs_Norm_Diagnosis": norm_diagnosis,
+                "Region_Column": region_col,
+                "ROI_Name": roi_name_for_output,
+                "Diagnosis_Mean": group_mean,
+                "Diagnosis_Std": group_std,
+                "Norm_Mean": norm_mean,
+                "Norm_Std": norm_std,
+                "Mean_Difference": mean_diff,
+                "Cliffs_Delta": cliff_delta,
+                "Cliffs_Delta_CI_Low": cliff_delta_ci_low,
+                "Cliffs_Delta_CI_High": cliff_delta_ci_high,
+                "Significant_Bootstrap_p05_uncorrected": is_significant_p05_uncorrected,
+                "Cohens_d": cohens_d,
+                "P_Value_Uncorrected": p_val_from_bootstrap
+            })
 
-        if len(effect_sizes) == 0:
-            print("No effect sizes calculated.")
-            return pd.DataFrame()
+    # Process main diagnoses
+    for diagnosis in diagnoses:
+        if diagnosis == norm_diagnosis:
+            continue
+        dx_data = results_df[results_df["Diagnosis"] == diagnosis]
+        process_group(diagnosis, dx_data)
 
-        effect_sizes_df = pd.DataFrame(effect_sizes)
+    # Process catatonia subgroups
+    for subgroup_name, subgroup_data in catatonia_subgroups.items():
+        process_group(subgroup_name, subgroup_data)
 
-        # Multiple testing correction
-        # FDR correction across all regions and diagnoses
-        effect_sizes_df['Significant_FDR_Corrected'] = False
-        effect_sizes_df['P_Value_FDR_Corrected'] = np.nan
+    if len(effect_sizes) == 0:
+        print("[ERROR] No effect sizes calculated")
+        return pd.DataFrame()
 
-        # Group by diagnosis and apply FDR correction within each diagnosis
-        for diagnosis_name in effect_sizes_df['Diagnosis'].unique():
-            mask = effect_sizes_df['Diagnosis'] == diagnosis_name
-            p_values = effect_sizes_df.loc[mask, 'P_Value_Uncorrected'].values
+    effect_sizes_df = pd.DataFrame(effect_sizes)
+    effect_sizes_df["Abs_Cliffs_Delta"] = effect_sizes_df["Cliffs_Delta"].abs()
+    effect_sizes_df["Abs_Cohens_d"] = effect_sizes_df["Cohens_d"].abs()
+    
+    # Save effect sizes
+    os.makedirs(f"{save_dir}/figures", exist_ok=True)
+    effect_sizes_df.to_csv(
+        f"{save_dir}/effect_sizes_with_bootstrap_ci_and_significance_vs_{norm_diagnosis}.csv", 
+        index=False
+    )
 
-            # Remove NaN values for correction
-            valid_p = ~np.isnan(p_values)
-            if valid_p.sum() > 0:
-                corrected_p = np.full_like(p_values, np.nan)
-                corrected_p[valid_p] = multipletests(p_values[valid_p], method='fdr_bh')[1]
+    # ========================================================================
+    # PAPER-STYLE PLOTS - FIXED PLOT AREA SIZE
+    # ========================================================================
 
-                effect_sizes_df.loc[mask, 'P_Value_FDR_Corrected'] = corrected_p
-                effect_sizes_df.loc[mask, 'Significant_FDR_Corrected'] = corrected_p < 0.05
+    print("\n[INFO] Creating paper-style plots (Top 16 per diagnosis)...")
 
-        # Save results
-        os.makedirs(f"{save_dir}/figures", exist_ok=True)
-        effect_sizes_df.to_csv(f"{save_dir}/regional_effect_sizes_vs_{norm_diagnosis}.csv", index=False)
+    for diagnosis in diagnoses:
+        if diagnosis == norm_diagnosis:
+            continue
 
-        def annotate_cell_with_significance(value, is_significant):
-            if pd.isna(value):
-                return ""
-            if is_significant:
-                return f"{value:.2f}*"
+        dx_effect_sizes = effect_sizes_df[effect_sizes_df["Diagnosis"] == diagnosis].copy()
+        if dx_effect_sizes.empty:
+            continue
+
+        dx_effect_sizes_sorted = dx_effect_sizes.sort_values("Abs_Cliffs_Delta", ascending=False)
+        top_regions = dx_effect_sizes_sorted.head(16)
+
+        # ========== FIXED: Control plot area size explicitly ==========
+        fig = plt.figure(figsize=(10, 10))  # Total canvas size
+        
+        # Create axes with fixed dimensions for the PLOT AREA
+        # [left, bottom, width, height] in figure coordinates (0-1)
+        ax = fig.add_axes([0.45, 0.1, 0.50, 0.85])  
+        # left=0.45 → Leaves space for long ROI names
+        # width=0.50 → FIXED width for error bar area (50% of figure)
+        # height=0.85 → FIXED height for plot area
+
+        y_pos = np.arange(len(top_regions))
+
+        for i, (idx, row) in enumerate(top_regions.iterrows()):
+            effect = row["Cliffs_Delta"]
+            ci_low = row["Cliffs_Delta_CI_Low"]
+            ci_high = row["Cliffs_Delta_CI_High"]
+
+            if pd.isna(ci_low) or pd.isna(ci_high):
+                continue
+
+            ax.plot([ci_low, ci_high], [i, i], 'k-', linewidth=1.5, alpha=0.8)
+            ax.plot(effect, i, 'ko', markersize=4, markerfacecolor='black', markeredgecolor='black')
+
+        # Format ROI names
+        formatted_labels = []
+        for roi_name in top_regions["ROI_Name"]:
+            if '(' in roi_name and ')' in roi_name:
+                formatted_labels.append(roi_name)
             else:
-                return f"{value:.2f}"
+                formatted_labels.append(format_roi_name_for_plotting_local(roi_name, atlas_name))
+        
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(formatted_labels, fontsize=9)
+        ax.invert_yaxis()
 
-        # Create heatmap with FDR-corrected significance
-        heatmap_data = effect_sizes_df.pivot(
-            index='ROI_Name',
-            columns='Diagnosis',
-            values='Cliffs_Delta'
-        )
+        ax.axvline(x=0, color="blue", linestyle="--", linewidth=1, alpha=0.7)
 
-        significance_matrix = effect_sizes_df.pivot(
-            index='ROI_Name',
-            columns='Diagnosis',
-            values='Significant_FDR_Corrected'
-        )
+        # Individual x-limits per diagnosis
+        valid_ci_rows = top_regions.dropna(subset=["Cliffs_Delta_CI_Low", "Cliffs_Delta_CI_High"])
+        if not valid_ci_rows.empty:
+            min_value = valid_ci_rows["Cliffs_Delta_CI_Low"].min()
+            max_value = valid_ci_rows["Cliffs_Delta_CI_High"].max()
 
-        # Filter for top regions based on mean absolute effect size
-        mean_abs_effect = heatmap_data.abs().mean(axis=1)
-        top_regions = mean_abs_effect.nlargest(min(50, len(mean_abs_effect))).index.tolist()
+            value_range = max_value - min_value
+            buffer = value_range * 0.05
 
-        heatmap_top = heatmap_data.loc[top_regions].copy()
-        significance_top = significance_matrix.loc[top_regions].copy()
-
-        # Column order
-        if merge_ctt_groups:
-            column_order = [d for d in ['SCHZ', 'MDD', 'CTT'] if d in heatmap_top.columns]
+            ax.set_xlim(min_value - buffer, max_value + buffer)
         else:
-            column_order = [d for d in ['SCHZ', 'MDD', 'CTT-SCHZ', 'CTT-MDD'] if d in heatmap_top.columns]
+            ax.set_xlim(-1, 1)
 
-        # Add subgroup columns
-        subgroup_cols = [col for col in heatmap_top.columns if col.startswith('CTT-') and col not in column_order]
-        column_order.extend(subgroup_cols)
+        ax.set_xlabel("Effect size", fontsize=10)
+        ax.set_title(f"Top 16 Regions {diagnosis} vs. {norm_diagnosis}\n({name})", 
+                    fontsize=11, fontweight='bold', pad=10)
 
-        heatmap_ordered = heatmap_top[column_order]
-        significance_ordered = significance_top[column_order]
+        ax.spines['top'].set_visible(True)
+        ax.spines['right'].set_visible(True)
+        ax.spines['left'].set_visible(True)
+        ax.spines['bottom'].set_visible(True)
 
-        # Create annotations with asterisks for significant effects
-        annot_combined = heatmap_ordered.apply(
-            lambda col: [annotate_cell_with_significance(val, significance_ordered.loc[idx, col.name])
+        ax.tick_params(axis='both', which='major', labelsize=9)
+        ax.grid(False)
+
+        # NO tight_layout() or bbox_inches='tight' → keeps fixed dimensions
+        plt.savefig(f"{save_dir}/figures/paper_style_{diagnosis}_vs_{norm_diagnosis}.png",
+                    dpi=300, facecolor='white')  # Removed bbox_inches='tight'
+        plt.close()
+        
+        print(f"  ✓ Created paper-style plot for {diagnosis}")
+
+    # ========================================================================
+    # HEATMAP 1 & 2 - FROM OLD SCRIPT
+    # ========================================================================
+    
+    print("\n[INFO] Creating Heatmap 1 & 2...")
+    
+    # Determine main diagnoses
+    if merge_ctt_groups:
+        desired_diagnoses = ['MDD', 'SCHZ', 'CTT']
+    else:
+        desired_diagnoses = ['MDD', 'SCHZ', 'CTT-SCHZ', 'CTT-MDD']
+    
+    available_diagnoses_for_heatmap = [diag for diag in desired_diagnoses if diag in effect_sizes_df["Diagnosis"].unique()]
+    
+    # Get CTT top 30 regions
+    if merge_ctt_groups:
+        ctt_effects = effect_sizes_df[effect_sizes_df["Diagnosis"] == "CTT"]
+    else:
+        ctt_effects = effect_sizes_df[effect_sizes_df["Diagnosis"].isin(["CTT-SCHZ", "CTT-MDD"])]
+
+    if not ctt_effects.empty:
+        if merge_ctt_groups:
+            ctt_top_regions_df = ctt_effects.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
+            ctt_top_regions = ctt_top_regions_df["ROI_Name"].values
+            print(f"[INFO] Selected top 30 CTT regions (n={len(ctt_effects)} total)")
+        else:
+            ctt_region_avg = ctt_effects.groupby("ROI_Name")["Abs_Cliffs_Delta"].mean().reset_index()
+            ctt_top_regions_df = ctt_region_avg.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
+            ctt_top_regions = ctt_top_regions_df["ROI_Name"].values
+            print(f"[INFO] Selected top 30 CTT regions (averaged across CTT-SCHZ and CTT-MDD)")
+    else:
+        print("[WARNING] No CTT data found for heatmaps")
+        ctt_top_regions = []
+
+    # Get overall top 30 regions
+    region_avg_effects = effect_sizes_df.groupby("ROI_Name")["Abs_Cliffs_Delta"].mean().reset_index()
+    overall_top_regions = region_avg_effects.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)["ROI_Name"].values
+    print(f"[INFO] Selected top 30 overall regions")
+
+    # Prepare heatmap data
+    heatmap_data = []
+    all_regions_for_heatmap = formatted_roi_names_for_plotting
+    all_diagnoses_in_effects = effect_sizes_df["Diagnosis"].unique()
+    
+    significance_flags_matrix = pd.DataFrame(index=all_regions_for_heatmap, columns=all_diagnoses_in_effects)
+    
+    for region_formatted_name in all_regions_for_heatmap:
+        row = {"ROI_Name": region_formatted_name}
+        for diagnosis in all_diagnoses_in_effects:
+            if diagnosis == norm_diagnosis:
+                row[diagnosis] = np.nan
+                significance_flags_matrix.loc[region_formatted_name, diagnosis] = False
+                continue
+
+            region_data = effect_sizes_df[(effect_sizes_df["ROI_Name"] == region_formatted_name) &
+                                        (effect_sizes_df["Diagnosis"] == diagnosis)]
+            if not region_data.empty:
+                row[diagnosis] = region_data.iloc[0]["Cliffs_Delta"]
+                significance_flags_matrix.loc[region_formatted_name, diagnosis] = region_data.iloc[0]["Significant_Bootstrap_p05_uncorrected"]
+            else:
+                row[diagnosis] = np.nan
+                significance_flags_matrix.loc[region_formatted_name, diagnosis] = False
+        heatmap_data.append(row)
+
+    heatmap_df = pd.DataFrame(heatmap_data)
+    heatmap_df.set_index("ROI_Name", inplace=True)
+    heatmap_df = heatmap_df.dropna(axis=1, how='all')
+
+    significance_flags_matrix = significance_flags_matrix.loc[heatmap_df.index, heatmap_df.columns]
+
+    def annotate_cell_with_significance(value, is_significant):
+        if pd.isna(value):
+            return ""
+        stars = "*" if is_significant else ""
+        return f"{value:.2f}{stars}"
+
+    # ========== HEATMAP 1: Top 30 CTT-affected regions ==========
+    print("\n[INFO] Creating Heatmap 1: Top 30 CTT-affected regions (3 diagnoses)...")
+    
+    if len(available_diagnoses_for_heatmap) > 0 and len(ctt_top_regions) > 0:
+        heatmap_ctt_regions_data = heatmap_df.loc[ctt_top_regions, available_diagnoses_for_heatmap].copy()
+        significance_ctt_regions = significance_flags_matrix.loc[ctt_top_regions, available_diagnoses_for_heatmap].copy()
+
+        annot_combined_ctt = heatmap_ctt_regions_data.apply(
+            lambda col: [annotate_cell_with_significance(val, significance_ctt_regions.loc[idx, col.name])
                         for idx, val in col.items()]
         )
-        annot_combined = pd.DataFrame(annot_combined.values.tolist(),
-                                      index=heatmap_ordered.index,
-                                      columns=heatmap_ordered.columns)
+        annot_combined_ctt = pd.DataFrame(annot_combined_ctt.values.tolist(),
+                                        index=heatmap_ctt_regions_data.index,
+                                        columns=heatmap_ctt_regions_data.columns)
 
-        # Plot heatmap
-        if not heatmap_ordered.empty and len(heatmap_ordered.columns) > 0:
-            fig_width = max(12, len(heatmap_ordered.columns) * 2)
-            fig_height = max(10, len(heatmap_ordered) * 0.35)
+        if not heatmap_ctt_regions_data.empty and not heatmap_ctt_regions_data.isna().all().all():
+            fig_width = max(12, len(available_diagnoses_for_heatmap) * 3)
+            plt.figure(figsize=(fig_width, 16))
 
-            fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+            mask = heatmap_ctt_regions_data.isna()
+            sns.heatmap(heatmap_ctt_regions_data, cmap="RdBu_r", center=0,
+                    annot=annot_combined_ctt,
+                    fmt="",
+                    cbar_kws={"label": "Cliff's Delta"}, mask=mask,
+                    square=False, linewidths=0.5)
 
-            mask = heatmap_ordered.isna()
-
-            sns.heatmap(heatmap_ordered,
-                       cmap="RdBu_r",
-                       center=0,
-                       annot=annot_combined,
-                       fmt="",
-                       mask=mask,
-                       cbar_kws={"label": "Cliff's Delta"},
-                       linewidths=0.5,
-                       ax=ax)
-
-            ax.set_title(f"Regional Effect Sizes vs {norm_diagnosis}\n(FDR-corrected, * p<0.05) \n {name}",
-                        fontsize=16, pad=20)
-            ax.set_xlabel("Diagnosis", fontsize=12)
-            ax.set_ylabel("Brain Region", fontsize=12)
-
+            plt.title(f"Heatmap 1: Top 30 CTT-Affected Regions vs {norm_diagnosis}\n{name}")
+            plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
-
-            plt.savefig(f"{save_dir}/figures/region_effect_heatmap_vs_{norm_diagnosis}.png",
-                       dpi=300, bbox_inches='tight')
+            plt.savefig(f"{save_dir}/figures/heatmap_1_ctt_regions_3diagnoses_vs_{norm_diagnosis}.png",
+                    dpi=300, bbox_inches='tight', facecolor='white')
             plt.close()
 
-            heatmap_ordered.to_csv(f"{save_dir}/top_regions_heatmap_vs_{norm_diagnosis}.csv")
+            heatmap_ctt_regions_data.to_csv(f"{save_dir}/heatmap_1_ctt_regions_3diagnoses_vs_{norm_diagnosis}.csv")
+            print(f"  ✓ Heatmap 1 created: {heatmap_ctt_regions_data.shape[0]} regions, {len(available_diagnoses_for_heatmap)} diagnoses")
+        else:
+            print("  [WARNING] No data available for Heatmap 1")
+    else:
+        print("  [WARNING] Cannot create Heatmap 1 - missing diagnoses or CTT regions")
 
-            print(f"\nRegional heatmap created successfully!")
-            print(f"Shape: {heatmap_ordered.shape}")
-            print(f"Saved to: {save_dir}/figures/region_effect_heatmap_vs_{norm_diagnosis}.png")
+    # ========== HEATMAP 2: Top 30 overall-affected regions ==========
+    print("\n[INFO] Creating Heatmap 2: Top 30 overall-affected regions (3 diagnoses)...")
+    
+    if len(available_diagnoses_for_heatmap) > 0:
+        heatmap_overall_regions_data = heatmap_df.loc[overall_top_regions, available_diagnoses_for_heatmap].copy()
+        significance_overall_regions = significance_flags_matrix.loc[overall_top_regions, available_diagnoses_for_heatmap].copy()
 
-        # Dataset split analysis (if applicable)
-        if 'Dataset' in results_df.columns:
-            # Check which datasets are present
-            available_datasets = results_df['Dataset'].unique()
-            print(f"\nAvailable datasets: {available_datasets}")
+        annot_combined_overall = heatmap_overall_regions_data.apply(
+            lambda col: [annotate_cell_with_significance(val, significance_overall_regions.loc[idx, col.name])
+                        for idx, val in col.items()]
+        )
+        annot_combined_overall = pd.DataFrame(annot_combined_overall.values.tolist(),
+                                            index=heatmap_overall_regions_data.index,
+                                            columns=heatmap_overall_regions_data.columns)
 
-            # Define dataset categories
-            dataset_categories = {
-                'whiteCAT': [d for d in available_datasets if 'whiteCAT' in d or 'WhiteCAT' in d],
-                'NSS': [d for d in available_datasets if 'NSS' in d],
-                'others': [d for d in available_datasets if d not in
-                          [ds for cat in ['whiteCAT', 'NSS'] for ds in
-                           ([dset for dset in available_datasets if cat in dset])]]
-            }
+        if not heatmap_overall_regions_data.empty and not heatmap_overall_regions_data.isna().all().all():
+            fig_width = max(12, len(available_diagnoses_for_heatmap) * 3)
+            plt.figure(figsize=(fig_width, 16))
 
-            print(f"Dataset categories: {dataset_categories}")
+            mask = heatmap_overall_regions_data.isna()
+            sns.heatmap(heatmap_overall_regions_data, cmap="RdBu_r", center=0,
+                    annot=annot_combined_overall,
+                    fmt="",
+                    cbar_kws={"label": "Cliff's Delta"}, mask=mask,
+                    square=False, linewidths=0.5)
 
-            # Store top regions for dataset split heatmap
-            top_regions_for_dataset_heatmap = top_regions
+            plt.title(f"Heatmap 2: Top 30 Overall-Affected Regions vs {norm_diagnosis}\n{name}")
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            plt.savefig(f"{save_dir}/figures/heatmap_2_overall_regions_3diagnoses_vs_{norm_diagnosis}.png",
+                    dpi=300, bbox_inches='tight')
+            plt.close()
 
-            dataset_split_effects = []
+            heatmap_overall_regions_data.to_csv(f"{save_dir}/heatmap_2_overall_regions_3diagnoses_vs_{norm_diagnosis}.csv")
+            print(f"  ✓ Heatmap 2 created: {heatmap_overall_regions_data.shape[0]} regions, {len(available_diagnoses_for_heatmap)} diagnoses")
+        else:
+            print("  [WARNING] No data available for Heatmap 2")
+    else:
+        print("  [WARNING] Cannot create Heatmap 2 - missing diagnoses")
 
-            if merge_ctt_groups:
-                main_diagnoses = ['SCHZ', 'MDD', 'CTT']
-            else:
-                main_diagnoses = ['SCHZ', 'MDD', 'CTT-SCHZ', 'CTT-MDD']
+    print("\n[INFO] Regional deviation analysis finished.")
 
-            for diagnosis in main_diagnoses:
-                if diagnosis == norm_diagnosis:
-                    continue
+    return effect_sizes_df
 
-                dx_data = results_df[results_df["Diagnosis"] == diagnosis]
-                if dx_data.empty:
-                    print(f"No data found for {diagnosis}")
-                    continue
-
-                print(f"Processing {diagnosis} (total n={len(dx_data)})")
-
-                for category_name, dataset_list in dataset_categories.items():
-                    if not dataset_list:
-                        continue
-
-                    category_data = dx_data[dx_data['Dataset'].isin(dataset_list)]
-
-                    if category_data.empty:
-                        print(f"  No {category_name} data for {diagnosis}")
-                        continue
-
-                    print(f"  {diagnosis}-{category_name}: n={len(category_data)}")
-
-                    for i, region_col in enumerate(region_cols):
-                        roi_name_for_output = formatted_roi_names_for_plotting[i] if i < len(formatted_roi_names_for_plotting) else f"Region_{i+1}"
-
-                        category_values = category_data[region_col].values
-                        norm_values = norm_data[region_col].values
-
-                        if len(category_values) == 0 or len(norm_values) == 0:
-                            continue
-
-                        cliff_delta = calculate_cliffs_delta(category_values, norm_values)
-
-                        ci_low, ci_high, p_val_dataset_from_bootstrap = bootstrap_cliffs_delta_ci(
-                            category_values, norm_values, num_bootstraps=NUM_BOOTSTRAPS, ci_level=CI_LEVEL
-                        )
-                        is_significant_p05_dataset_uncorrected = False
-                        if not pd.isna(ci_low) and not pd.isna(ci_high):
-                            if (ci_low > 0) or (ci_high < 0):
-                                is_significant_p05_dataset_uncorrected = True
-
-                        dataset_split_effects.append({
-                            'Diagnosis_Dataset': f"{diagnosis}-{category_name}",
-                            'Diagnosis': diagnosis,
-                            'Dataset_Category': category_name,
-                            'ROI_Name': roi_name_for_output,
-                            'Cliffs_Delta': cliff_delta,
-                            'Significant_Bootstrap_p05_uncorrected': is_significant_p05_dataset_uncorrected,
-                            'P_Value_Uncorrected': p_val_dataset_from_bootstrap,
-                            'N_Subjects': len(category_values)
-                        })
-
-            if dataset_split_effects:
-                dataset_effects_df = pd.DataFrame(dataset_split_effects)
-
-                heatmap_dataset = dataset_effects_df.pivot(
-                    index='ROI_Name',
-                    columns='Diagnosis_Dataset',
-                    values='Cliffs_Delta'
-                )
-
-                significance_dataset_matrix = dataset_effects_df.pivot(
-                    index='ROI_Name',
-                    columns='Diagnosis_Dataset',
-                    values='Significant_Bootstrap_p05_uncorrected'
-                )
-
-                heatmap_dataset_top = heatmap_dataset.loc[top_regions_for_dataset_heatmap].copy()
-                significance_dataset_top = significance_dataset_matrix.loc[top_regions_for_dataset_heatmap].copy()
-
-
-                column_order = []
-                for diagnosis in main_diagnoses:
-                    if diagnosis == norm_diagnosis:
-                        continue
-                    for category in ['whiteCAT', 'NSS', 'others']:
-                        col_name = f"{diagnosis}-{category}"
-                        if col_name in heatmap_dataset_top.columns:
-                            column_order.append(col_name)
-
-                heatmap_dataset_ordered = heatmap_dataset_top[column_order]
-                significance_dataset_ordered = significance_dataset_top[column_order]
-
-                annot_combined_dataset = heatmap_dataset_ordered.apply(
-                    lambda col: [annotate_cell_with_significance(val, significance_dataset_ordered.loc[idx, col.name])
-                                for idx, val in col.items()]
-                )
-                annot_combined_dataset = pd.DataFrame(annot_combined_dataset.values.tolist(),
-                                                    index=heatmap_dataset_ordered.index,
-                                                    columns=heatmap_dataset_ordered.columns)
-
-                if not heatmap_dataset_ordered.empty and len(heatmap_dataset_ordered.columns) > 0:
-                    fig_width = max(16, len(heatmap_dataset_ordered.columns) * 2.5)
-                    fig_height = max(14, len(heatmap_dataset_ordered) * 0.4)
-
-                    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-
-                    mask = heatmap_dataset_ordered.isna()
-
-                    sns.heatmap(heatmap_dataset_ordered,
-                            cmap="RdBu_r",
-                            center=0,
-                            annot=annot_combined_dataset,
-                            fmt="",
-                            mask=mask,
-                            cbar_kws={"label": "Cliff's Delta"},
-                            linewidths=0.5,
-                            ax=ax)
-
-                    ax.set_title(f"Regional Effect Sizes vs {norm_diagnosis}\n(Split by Dataset: whiteCAT, NSS, others) \n {name}",
-                                fontsize=16, pad=20)
-                    ax.set_xlabel("Diagnosis-Dataset", fontsize=12)
-                    ax.set_ylabel("Brain Region", fontsize=12)
-
-                    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-
-                    col_positions = []
-                    current_pos = 0
-                    diagnosis_positions = {}
-
-                    for diagnosis in main_diagnoses:
-                        if diagnosis == norm_diagnosis:
-                            continue
-
-                        diagnosis_cols = [col for col in column_order if col.startswith(f"{diagnosis}-")]
-                        if diagnosis_cols:
-                            diagnosis_positions[diagnosis] = current_pos + len(diagnosis_cols)/2
-                            current_pos += len(diagnosis_cols)
-                            col_positions.append(current_pos)
-
-                    for pos in col_positions[:-1]:
-                        ax.axvline(x=pos, color='black', linewidth=2, alpha=0.8)
-
-                    plt.tight_layout()
-
-                    plt.savefig(f"{save_dir}/figures/region_effect_heatmap_dataset_split_vs_{norm_diagnosis}.png",
-                            dpi=300, bbox_inches='tight')
-                    plt.close()
-
-                    heatmap_dataset_ordered.to_csv(f"{save_dir}/top_regions_heatmap_dataset_split_vs_{norm_diagnosis}.csv")
-
-                    print(f"\nDataset-split heatmap created successfully!")
-                    print(f"Shape: {heatmap_dataset_ordered.shape}")
-                    print(f"Columns: {list(heatmap_dataset_ordered.columns)}")
-
-                    print("\nData availability per column:")
-                    for col in heatmap_dataset_ordered.columns:
-                        non_nan = heatmap_dataset_ordered[col].notna().sum()
-                        total = len(heatmap_dataset_ordered)
-                        pct = (non_nan/total*100) if total > 0 else 0
-                        print(f"  {col}: {non_nan}/{total} regions ({pct:.1f}%)")
-
-        print("[INFO] Regional deviation analysis finished.")
-
-        return effect_sizes_df
 
 ######################################################## CORRELATION ANALYSIS ################################################################
 

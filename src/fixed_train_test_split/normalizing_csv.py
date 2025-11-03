@@ -1,14 +1,10 @@
 """
-preprocessing_normalize_multimodal.py
+preprocessing_normalize_multimodal_SEPARATE.py
 
-This script:
-1. Loads your FIXED train/test split metadata
-2. Identifies Training-HC subjects
-3. Calculates normalization stats ONLY from Training-HC
-4. Normalizes ALL subjects with these HC-only stats
-5. Saves normalized CSV for future use
-
-Run this ONCE, then use the normalized CSV for all training/testing!
+CORRECTED VERSION:
+- Training data normalized with Training-HC stats
+- Testing data normalized with Testing-HC stats
+- NO information leakage between train/test!
 """
 
 import pandas as pd
@@ -56,25 +52,6 @@ def identify_roi_columns(
     print("STEP 2: Identifying ROI Columns")
     print("="*80)
     
-    if atlases is None:
-        atlases = ['neuromorphometrics', 'lpba40', 'cobra', 'suit', 
-                   'ibsr', 'aal3', 'schaefer100', 'schaefer200', 
-                   'aparc_dk40', 'aparc_destrieux']
-    
-    # Mapping of atlas names to prefixes in column names
-    atlas_prefixes = {
-        'neuromorphometrics': 'Neurom',
-        'lpba40': 'lpba40',
-        'cobra': 'cobra',
-        'suit': 'SUIT',
-        'ibsr': 'IBSR',
-        'aal3': 'AAL3',
-        'schaefer100': 'Sch100',
-        'schaefer200': 'Sch200',
-        'aparc_dk40': 'DK40',
-        'aparc_destrieux': 'Destrieux'
-    }
-    
     volume_types = {
         'Vgm': [],
         'G': [],
@@ -83,7 +60,10 @@ def identify_roi_columns(
     
     for col in mri_data.columns:
         # Skip non-ROI columns
-        if col in ['Filename', 'Dataset', 'IQR', 'NCR', 'TIV']:
+        if col in ['Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV',
+                   'GM_vol', 'WM_vol', 'CSF_vol', 'WMH_vol',
+                   'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
+                   'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global']:
             continue
         
         # Check volume type
@@ -102,11 +82,18 @@ def identify_roi_columns(
 
 def calculate_hc_stats(
     mri_data: pd.DataFrame,
-    train_meta: pd.DataFrame,
-    volume_type_columns: Dict[str, List[str]]
+    hc_filenames: List[str],
+    volume_type_columns: Dict[str, List[str]],
+    split_name: str = "Split"
 ) -> Dict[str, Dict[str, pd.Series]]:
     """
-    Calculate mean and std from Training-HC ONLY.
+    Calculate mean and std from HC subjects ONLY.
+    
+    Args:
+        mri_data: Full MRI data
+        hc_filenames: List of HC subject filenames
+        volume_type_columns: Dict of volume type columns
+        split_name: "Training" or "Testing" (for logging)
     
     Returns:
         {
@@ -116,23 +103,20 @@ def calculate_hc_stats(
         }
     """
     
-    print("\n" + "="*80)
-    print("STEP 3: Calculating HC-Only Statistics")
-    print("="*80)
+    print(f"\n{'='*80}")
+    print(f"Calculating {split_name}-HC Statistics")
+    print(f"{'='*80}")
     
-    # Identify Training-HC subjects
-    train_hc = train_meta[train_meta['Diagnosis'] == 'HC']
-    train_hc_filenames = train_hc['Filename'].values
-    print(f"✓ Found {len(train_hc_filenames)} Training-HC subjects")
+    print(f"✓ {split_name}-HC subjects: {len(hc_filenames)}")
     
-    # Filter MRI data to Training-HC
-    train_hc_mask = mri_data['Filename'].isin(train_hc_filenames)
-    train_hc_data = mri_data[train_hc_mask]
-    print(f"✓ Matched {train_hc_mask.sum()}/{len(train_hc_filenames)} in MRI data")
+    # Filter MRI data to HC subjects
+    hc_mask = mri_data['Filename'].isin(hc_filenames)
+    hc_data = mri_data[hc_mask]
+    print(f"✓ Matched {hc_mask.sum()}/{len(hc_filenames)} in MRI data")
     
-    if train_hc_mask.sum() < len(train_hc_filenames):
-        missing = len(train_hc_filenames) - train_hc_mask.sum()
-        print(f"⚠ WARNING: {missing} Training-HC subjects not found in MRI data")
+    if hc_mask.sum() < len(hc_filenames):
+        missing = len(hc_filenames) - hc_mask.sum()
+        print(f"⚠ WARNING: {missing} {split_name}-HC subjects not found in MRI data")
     
     # Calculate stats per volume type
     hc_stats = {}
@@ -144,12 +128,12 @@ def calculate_hc_stats(
         print(f"\nProcessing {vtype}:")
         
         # Get HC data for this volume type
-        vtype_hc_data = train_hc_data[columns]
+        vtype_hc_data = hc_data[columns].copy()
         
         # TIV normalization (only for Vgm)
-        if vtype == 'Vgm' and 'TIV' in train_hc_data.columns:
+        if vtype == 'Vgm' and 'TIV' in hc_data.columns:
             print(f"  - Applying TIV normalization")
-            tiv = train_hc_data['TIV'].values.reshape(-1, 1)
+            tiv = hc_data['TIV'].values.reshape(-1, 1)
             vtype_hc_data = vtype_hc_data.div(tiv, axis=0)
         
         # Calculate mean and std
@@ -174,21 +158,35 @@ def calculate_hc_stats(
     return hc_stats
 
 
-def normalize_all_data(
+def normalize_split_data(
     mri_data: pd.DataFrame,
+    split_filenames: List[str],
     volume_type_columns: Dict[str, List[str]],
-    hc_stats: Dict[str, Dict[str, pd.Series]]
+    hc_stats: Dict[str, Dict[str, pd.Series]],
+    split_name: str = "Split"
 ) -> pd.DataFrame:
     """
-    Normalize ALL subjects using HC-only stats.
+    Normalize subjects from one split using its own HC stats.
+    
+    Args:
+        mri_data: Full MRI data
+        split_filenames: List of filenames in this split
+        volume_type_columns: Dict of volume type columns
+        hc_stats: HC statistics for this split
+        split_name: "Training" or "Testing" (for logging)
+    
+    Returns:
+        Normalized data for this split only
     """
     
-    print("\n" + "="*80)
-    print("STEP 4: Normalizing ALL Subjects with HC Stats")
-    print("="*80)
+    print(f"\n{'='*80}")
+    print(f"Normalizing {split_name} Data")
+    print(f"{'='*80}")
     
-    # Create a copy
-    normalized_data = mri_data.copy()
+    # Filter to split subjects
+    split_mask = mri_data['Filename'].isin(split_filenames)
+    split_data = mri_data[split_mask].copy()
+    print(f"✓ Found {split_mask.sum()}/{len(split_filenames)} subjects in MRI data")
     
     for vtype, columns in volume_type_columns.items():
         if not columns:
@@ -197,12 +195,12 @@ def normalize_all_data(
         print(f"\nNormalizing {vtype}:")
         
         # Get data for this volume type
-        vtype_data = normalized_data[columns].copy()
+        vtype_data = split_data[columns].copy()
         
         # TIV normalization (only for Vgm)
-        if vtype == 'Vgm' and 'TIV' in normalized_data.columns:
+        if vtype == 'Vgm' and 'TIV' in split_data.columns:
             print(f"  - Applying TIV normalization")
-            tiv = normalized_data['TIV'].values.reshape(-1, 1)
+            tiv = split_data['TIV'].values.reshape(-1, 1)
             vtype_data = vtype_data.div(tiv, axis=0)
         
         # Z-score normalization with HC stats
@@ -211,40 +209,40 @@ def normalize_all_data(
         
         vtype_normalized = (vtype_data - means) / stds
         
-        # Replace in normalized_data
-        normalized_data[columns] = vtype_normalized
+        # Replace in split_data
+        split_data[columns] = vtype_normalized
         
         print(f"  ✓ Normalized {len(columns)} features")
         print(f"  - Value range: [{vtype_normalized.min().min():.3f}, {vtype_normalized.max().max():.3f}]")
     
-    return normalized_data
+    return split_data
 
 
 def validate_normalization(
     normalized_data: pd.DataFrame,
-    train_meta: pd.DataFrame,
-    volume_type_columns: Dict[str, List[str]]
+    hc_filenames: List[str],
+    volume_type_columns: Dict[str, List[str]],
+    split_name: str = "Split"
 ):
     """
-    Validate that Training-HC has mean≈0, std≈1.
+    Validate that HC has mean≈0, std≈1.
     """
     
-    print("\n" + "="*80)
-    print("STEP 5: Validation")
-    print("="*80)
+    print(f"\n{'='*80}")
+    print(f"Validation: {split_name}-HC")
+    print(f"{'='*80}")
     
-    # Get Training-HC from normalized data
-    train_hc_filenames = train_meta[train_meta['Diagnosis'] == 'HC']['Filename'].values
-    train_hc_mask = normalized_data['Filename'].isin(train_hc_filenames)
-    train_hc_normalized = normalized_data[train_hc_mask]
+    # Get HC from normalized data
+    hc_mask = normalized_data['Filename'].isin(hc_filenames)
+    hc_normalized = normalized_data[hc_mask]
     
-    print(f"\nValidating Training-HC (n={train_hc_mask.sum()}):")
+    print(f"\nValidating {split_name}-HC (n={hc_mask.sum()}):")
     
     for vtype, columns in volume_type_columns.items():
         if not columns:
             continue
         
-        vtype_data = train_hc_normalized[columns]
+        vtype_data = hc_normalized[columns]
         
         mean_of_means = vtype_data.mean().mean()
         mean_of_stds = vtype_data.std().mean()
@@ -260,13 +258,15 @@ def validate_normalization(
 
 
 def save_results(
-    normalized_data: pd.DataFrame,
-    hc_stats: Dict,
+    train_normalized: pd.DataFrame,
+    test_normalized: pd.DataFrame,
+    train_hc_stats: Dict,
+    test_hc_stats: Dict,
     output_dir: str,
-    prefix: str = "columnwise_HC"
+    prefix: str = "columnwise_HC_separate"
 ):
     """
-    Save normalized data and stats.
+    Save normalized data and stats for both splits.
     """
     
     print("\n" + "="*80)
@@ -275,53 +275,84 @@ def save_results(
     
     os.makedirs(output_dir, exist_ok=True)
     
-    # Save normalized CSV
-    csv_path = os.path.join(output_dir, f"CAT12_results_NORMALIZED_{prefix}.csv")
-    normalized_data.to_csv(csv_path, index=False)
-    print(f"✓ Saved normalized CSV: {csv_path}")
+    # Save TRAINING normalized CSV
+    train_csv_path = os.path.join(output_dir, f"CAT12_results_NORMALIZED_{prefix}_TRAIN.csv")
+    train_normalized.to_csv(train_csv_path, index=False)
+    print(f"✓ Saved TRAINING normalized CSV: {train_csv_path}")
     
-    # Save stats
-    stats_path = os.path.join(output_dir, f"normalization_stats_{prefix}.pkl")
-    with open(stats_path, 'wb') as f:
-        pickle.dump(hc_stats, f)
-    print(f"✓ Saved normalization stats: {stats_path}")
+    # Save TESTING normalized CSV
+    test_csv_path = os.path.join(output_dir, f"CAT12_results_NORMALIZED_{prefix}_TEST.csv")
+    test_normalized.to_csv(test_csv_path, index=False)
+    print(f"✓ Saved TESTING normalized CSV: {test_csv_path}")
     
-    # Save human-readable stats
-    stats_txt_path = os.path.join(output_dir, f"normalization_stats_{prefix}.txt")
-    with open(stats_txt_path, 'w') as f:
-        f.write("HC-ONLY NORMALIZATION STATISTICS\n")
+    # Save training stats
+    train_stats_path = os.path.join(output_dir, f"normalization_stats_{prefix}_TRAIN.pkl")
+    with open(train_stats_path, 'wb') as f:
+        pickle.dump(train_hc_stats, f)
+    print(f"✓ Saved TRAINING normalization stats: {train_stats_path}")
+    
+    # Save testing stats
+    test_stats_path = os.path.join(output_dir, f"normalization_stats_{prefix}_TEST.pkl")
+    with open(test_stats_path, 'wb') as f:
+        pickle.dump(test_hc_stats, f)
+    print(f"✓ Saved TESTING normalization stats: {test_stats_path}")
+    
+    # Save human-readable comparison
+    comparison_path = os.path.join(output_dir, f"normalization_stats_{prefix}_COMPARISON.txt")
+    with open(comparison_path, 'w') as f:
+        f.write("SEPARATE HC-ONLY NORMALIZATION STATISTICS\n")
         f.write("="*80 + "\n\n")
+        f.write("Training and Testing are normalized SEPARATELY with their own HC stats.\n")
+        f.write("This prevents information leakage between train/test splits.\n\n")
         
         for vtype in ['Vgm', 'G', 'T']:
-            if vtype not in hc_stats:
+            if vtype not in train_hc_stats:
                 continue
             
             f.write(f"\n{vtype}:\n")
-            f.write(f"  Number of features: {len(hc_stats[vtype]['mean'])}\n")
-            f.write(f"  Mean range: [{hc_stats[vtype]['mean'].min():.6f}, {hc_stats[vtype]['mean'].max():.6f}]\n")
-            f.write(f"  Std range: [{hc_stats[vtype]['std'].min():.6f}, {hc_stats[vtype]['std'].max():.6f}]\n")
+            f.write(f"-"*80 + "\n")
+            
+            # Training stats
+            f.write(f"TRAINING-HC:\n")
+            f.write(f"  Number of features: {len(train_hc_stats[vtype]['mean'])}\n")
+            f.write(f"  Mean range: [{train_hc_stats[vtype]['mean'].min():.6f}, {train_hc_stats[vtype]['mean'].max():.6f}]\n")
+            f.write(f"  Std range: [{train_hc_stats[vtype]['std'].min():.6f}, {train_hc_stats[vtype]['std'].max():.6f}]\n")
+            
+            # Testing stats
+            f.write(f"\nTESTING-HC:\n")
+            f.write(f"  Number of features: {len(test_hc_stats[vtype]['mean'])}\n")
+            f.write(f"  Mean range: [{test_hc_stats[vtype]['mean'].min():.6f}, {test_hc_stats[vtype]['mean'].max():.6f}]\n")
+            f.write(f"  Std range: [{test_hc_stats[vtype]['std'].min():.6f}, {test_hc_stats[vtype]['std'].max():.6f}]\n")
+            
+            # Difference
+            mean_diff = np.abs(train_hc_stats[vtype]['mean'] - test_hc_stats[vtype]['mean']).mean()
+            std_diff = np.abs(train_hc_stats[vtype]['std'] - test_hc_stats[vtype]['std']).mean()
+            f.write(f"\nDIFFERENCE (Train vs Test):\n")
+            f.write(f"  Mean difference (avg): {mean_diff:.6f}\n")
+            f.write(f"  Std difference (avg): {std_diff:.6f}\n")
     
-    print(f"✓ Saved human-readable stats: {stats_txt_path}")
+    print(f"✓ Saved comparison stats: {comparison_path}")
     
     print("\n" + "="*80)
     print("✅ PRE-PROCESSING COMPLETE!")
     print("="*80)
-    print(f"\nNormalized CSV: {csv_path}")
-    print(f"Use this file for ALL future training and testing!")
+    print(f"\nTraining CSV: {train_csv_path}")
+    print(f"Testing CSV: {test_csv_path}")
+    print(f"\n⚠️ IMPORTANT: Use TRAINING CSV for training, TESTING CSV for testing!")
     print("="*80)
 
 
 def main():
-    """Main preprocessing pipeline."""
+    """Main preprocessing pipeline with SEPARATE normalization."""
     
     # Configuration
     MRI_CSV_PATH = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
-    TRAIN_META_PATH = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/train_metadataHC_0.720251024_1927.csv"
-    TEST_META_PATH = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251024_1927.csv"
+    TRAIN_META_PATH = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/train_metadataHC_0.720251103_1438.csv"
+    TEST_META_PATH = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251103_1438.csv"
     OUTPUT_DIR = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training"
     
     print("\n" + "="*80)
-    print("MULTIMODAL HC-ONLY NORMALIZATION PREPROCESSING")
+    print("MULTIMODAL HC-ONLY NORMALIZATION (SEPARATE TRAIN/TEST)")
     print("="*80)
     print(f"\nMRI Data: {MRI_CSV_PATH}")
     print(f"Train Metadata: {TRAIN_META_PATH}")
@@ -336,17 +367,68 @@ def main():
     # Step 2: Identify ROI columns
     volume_type_columns = identify_roi_columns(mri_data)
     
-    # Step 3: Calculate HC-only stats
-    hc_stats = calculate_hc_stats(mri_data, train_meta, volume_type_columns)
+    # ========== TRAINING SPLIT ==========
+    print("\n" + "="*80)
+    print("PROCESSING TRAINING SPLIT")
+    print("="*80)
     
-    # Step 4: Normalize all data
-    normalized_data = normalize_all_data(mri_data, volume_type_columns, hc_stats)
+    # Get Training-HC filenames
+    train_hc = train_meta[train_meta['Diagnosis'] == 'HC']
+    train_hc_filenames = train_hc['Filename'].values
     
-    # Step 5: Validate
-    validate_normalization(normalized_data, train_meta, volume_type_columns)
+    # Get all Training filenames
+    train_all_filenames = train_meta['Filename'].values
     
-    # Step 6: Save
-    save_results(normalized_data, hc_stats, OUTPUT_DIR)
+    # Calculate Training-HC stats
+    train_hc_stats = calculate_hc_stats(
+        mri_data, train_hc_filenames, volume_type_columns, split_name="Training"
+    )
+    
+    # Normalize Training data with Training-HC stats
+    train_normalized = normalize_split_data(
+        mri_data, train_all_filenames, volume_type_columns, 
+        train_hc_stats, split_name="Training"
+    )
+    
+    # Validate Training
+    validate_normalization(
+        train_normalized, train_hc_filenames, volume_type_columns, split_name="Training"
+    )
+    
+    # ========== TESTING SPLIT ==========
+    print("\n" + "="*80)
+    print("PROCESSING TESTING SPLIT")
+    print("="*80)
+    
+    # Get Testing-HC filenames
+    test_hc = test_meta[test_meta['Diagnosis'] == 'HC']
+    test_hc_filenames = test_hc['Filename'].values
+    
+    # Get all Testing filenames
+    test_all_filenames = test_meta['Filename'].values
+    
+    # Calculate Testing-HC stats
+    test_hc_stats = calculate_hc_stats(
+        mri_data, test_hc_filenames, volume_type_columns, split_name="Testing"
+    )
+    
+    # Normalize Testing data with Testing-HC stats
+    test_normalized = normalize_split_data(
+        mri_data, test_all_filenames, volume_type_columns, 
+        test_hc_stats, split_name="Testing"
+    )
+    
+    # Validate Testing
+    validate_normalization(
+        test_normalized, test_hc_filenames, volume_type_columns, split_name="Testing"
+    )
+    
+    # ========== SAVE RESULTS ==========
+    save_results(
+        train_normalized, test_normalized,
+        train_hc_stats, test_hc_stats,
+        OUTPUT_DIR
+    )
 
 
 if __name__ == "__main__":

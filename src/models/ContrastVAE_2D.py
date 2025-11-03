@@ -69,6 +69,7 @@ class NormativeVAE_2D(nn.Module):
         schedule_on_validation=True,
         scheduler_patience=10,
         scheduler_factor=0.5,
+        kl_warmup_epochs=50,  # NEW: Number of epochs for KL warmup
         
     ):
         super(NormativeVAE_2D, self).__init__()
@@ -78,6 +79,10 @@ class NormativeVAE_2D(nn.Module):
         self.hidden_dim_1 = hidden_dim_1
         self.hidden_dim_2 = hidden_dim_2
         self.latent_dim = latent_dim
+        
+        # NEW: KL warmup parameters
+        self.kl_warmup_epochs = kl_warmup_epochs
+        self.current_epoch = 0  # Track current epoch for warmup
         
         # Encoder
         self.encoder = nn.Sequential(
@@ -158,6 +163,24 @@ class NormativeVAE_2D(nn.Module):
         
         # Initialize weights
         self.apply(self._init_weights)
+    
+    # NEW: Method to get current KL weight with warmup
+    def get_kl_weight(self):
+        """
+        Gradually increase KL weight from 0 to target weight over warmup_epochs.
+        This prevents posterior collapse by allowing the encoder to learn 
+        meaningful representations before enforcing the N(0,1) prior.
+        
+        MODIFIED: Using much higher final weight to combat collapse
+        """
+        if self.current_epoch < self.kl_warmup_epochs:
+            # Linear warmup
+            warmup_factor = self.current_epoch / self.kl_warmup_epochs
+            # CHANGED: Multiply by 4 to get much stronger KL penalty
+            return warmup_factor * self.kldiv_loss_weight * 4.0
+        else:
+            # Full weight after warmup - CHANGED: 4x stronger
+            return self.kldiv_loss_weight * 4.0
             
     #Initialize weights for linear layers
     def _init_weights(self, module): 
@@ -206,21 +229,43 @@ class NormativeVAE_2D(nn.Module):
             recon, _, _ = self(x)
         return recon
     
-    #VAE loss function with reconstruction error and KL divergence
-    def loss_function(self, recon_x, x, mu, logvar):
+    # MODIFIED: VAE loss function with KL warmup AND Free Bits
+    def loss_function(self, recon_x, x, mu, logvar, free_bits=0.5):
+        """
+        VAE loss with KL warmup and Free Bits.
+        
+        Free Bits: Don't penalize KL below 'free_bits' per dimension.
+        This prevents complete collapse while still allowing meaningful structure.
+        """
         # Rekonstruktionsloss (MSE between input and reconstructed feature map)
         recon_loss = F.mse_loss(recon_x, x, reduction="mean")
-        # KL-Divergenz
-        kldiv_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-        kldiv_loss = kldiv_loss * self.kldiv_loss_weight
+        
+        # KL-Divergenz per dimension
+        kl_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+        
+        # Free Bits: Clamp each dimension to minimum 'free_bits'
+        # This prevents collapse to 0 while maintaining gradients
+        kl_per_dim_clamped = torch.clamp(kl_per_dim, min=free_bits)
+        
+        # Sum across latent dimensions, mean across batch
+        kldiv_loss_raw = kl_per_dim_clamped.sum(dim=1).mean()
+        
+        # MODIFIED: Apply dynamic KL weight with warmup
+        current_kl_weight = self.get_kl_weight()
+        kldiv_loss = kldiv_loss_raw * current_kl_weight
+        
         # total loss
         total_loss = recon_loss + kldiv_loss
         
         return total_loss, recon_loss, kldiv_loss
     
 
-    #Trains for one epoch
+    # MODIFIED: Trains for one epoch - now updates epoch counter
     def train_one_epoch(self, train_loader: DataLoader, epoch: int) -> Dict[str, float]:
+        # NEW: Update current epoch for KL warmup
+        self.current_epoch = epoch
+        current_kl_weight = self.get_kl_weight()
+        
         # Set to train mode
         self.train()
         total_loss, contr_loss, recon_loss, kldiv_loss = 0.0, 0.0, 0.0, 0.0
@@ -245,14 +290,14 @@ class NormativeVAE_2D(nn.Module):
                 # Forward pass
                 recon_data, mu, logvar = self(batch_measurements)
                 
-                # Calculate loss
-                b_total_loss, b_contr_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
-                    recon_measurements=recon_data,
-                    meas=batch_measurements,
+                # Calculate loss - FIXED: Use correct parameters
+                b_total_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
+                    recon_x=recon_data,
+                    x=batch_measurements,
                     mu=mu,
-                    log_var=logvar,
-                    labels=batch_labels,
+                    logvar=logvar
                 )
+                b_contr_loss = torch.tensor(0.0)  # No contrastive loss in this version
             
             # Backward pass with gradient scaling
             self.optimizer.zero_grad()
@@ -291,11 +336,16 @@ class NormativeVAE_2D(nn.Module):
             "t_contr_loss": contr_loss / len(train_loader.dataset),
             "t_recon_loss": recon_loss / len(train_loader.dataset),
             "t_kldiv_loss": kldiv_loss / len(train_loader.dataset),
+            "kl_weight": current_kl_weight,  # NEW: Log current KL weight
         }
         
         # Calculate loss proportions
         epoch_props = loss_proportions("train_loss", epoch_metrics)
     
+        # NEW: Log KL warmup progress
+        if epoch <= self.kl_warmup_epochs:
+            logging.info(f"KL Warmup: Epoch {epoch}/{self.kl_warmup_epochs}, KL weight: {current_kl_weight:.4f}")
+        
         log_model_metrics(epoch, epoch_props, type="Training Metrics:")
         
         # Update learning rate if needed
@@ -307,9 +357,13 @@ class NormativeVAE_2D(nn.Module):
         
         return epoch_metrics
     
-    #validation
+    # MODIFIED: validation - now updates epoch counter
     @torch.no_grad()
     def validate(self, valid_loader, epoch) -> Dict[str, float]:
+        # NEW: Update current epoch for KL warmup
+        self.current_epoch = epoch
+        current_kl_weight = self.get_kl_weight()
+        
         # Set to evaluation mode
         self.eval()
         
@@ -330,13 +384,15 @@ class NormativeVAE_2D(nn.Module):
             
             with torch.cuda.amp.autocast(enabled=True):
                 recon_data, mu, logvar = self(batch_measurements)
-                b_total_loss, b_contr_loss, b_recon_loss, b_kldiv_loss = self.combined_loss_function(
-                    recon_measurements=recon_data,
-                    meas=batch_measurements,
+                
+                # Calculate loss - FIXED: Use correct parameters
+                b_total_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
+                    recon_x=recon_data,
+                    x=batch_measurements,
                     mu=mu,
-                    log_var=logvar,
-                    labels=batch_labels,
+                    logvar=logvar
                 )
+                b_contr_loss = torch.tensor(0.0)  # No contrastive loss in this version
             
             total_loss += b_total_loss.item()
             contr_loss += b_contr_loss.item()
@@ -355,6 +411,7 @@ class NormativeVAE_2D(nn.Module):
             "v_contr_loss": contr_loss / len(valid_loader.dataset),
             "v_recon_loss": recon_loss / len(valid_loader.dataset),
             "v_kldiv_loss": kldiv_loss / len(valid_loader.dataset),
+            "kl_weight": current_kl_weight,  # NEW: Log current KL weight
         }
     
         epoch_props = loss_proportions("valid_loss", epoch_metrics)
@@ -371,7 +428,7 @@ class NormativeVAE_2D(nn.Module):
         return epoch_metrics
     
     
-#TRAINING FUNCTION for one single normative model (no bootstrapping), returns trained model 
+# MODIFIED: TRAINING FUNCTION with epoch tracking for warmup
 def train_normative_model_plots(train_data, valid_data, model, epochs, batch_size, save_best=True, return_history=True):
     
     device = model.device
@@ -383,6 +440,7 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         'val_loss': [],
         'recon_loss': [],
         'kl_loss': [],
+        'kl_weight': [],  # NEW: Track KL weight over time
         'best_epoch': 0,
         'best_val_loss': float('inf')
     }
@@ -398,6 +456,10 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
     best_model_state = None
     
     for epoch in range(epochs):
+        # NEW: Update model's epoch counter
+        model.current_epoch = epoch
+        current_kl_weight = model.get_kl_weight()
+        
         model.train()
         train_loss = 0.0
         train_recon_loss = 0.0
@@ -447,6 +509,7 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         history['val_loss'].append(val_loss)
         history['recon_loss'].append(train_recon_loss)
         history['kl_loss'].append(train_kl_loss)
+        history['kl_weight'].append(current_kl_weight)  # NEW: Track KL weight
         
         # Save best model based on validation loss
         if val_loss < history['best_val_loss']:
@@ -457,7 +520,8 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs-1:
             log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
-                         f"Val Loss: {val_loss:.4f}, Recon: {train_recon_loss:.4f}, KL: {train_kl_loss:.4f}")
+                         f"Val Loss: {val_loss:.4f}, Recon: {train_recon_loss:.4f}, "
+                         f"KL: {train_kl_loss:.4f}, KL_weight: {current_kl_weight:.4f}")  # NEW: Log KL weight
     
     # Load best model if available
     if save_best and best_model_state is not None:
@@ -487,6 +551,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
     os.makedirs(loss_dir, exist_ok=True)
     
     log_and_print(f"Starting bootstrap training with {n_bootstraps} iterations")
+    log_and_print(f"KL warmup will occur over first {model.kl_warmup_epochs} epochs")  # NEW
     
     # Combine training and validation data for visualization
     combined_data = torch.cat([train_data, valid_data], dim=0)
@@ -510,6 +575,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
             dropout_prob=model.dropout_prob,
             recon_loss_weight=model.recon_loss_weight,
             contr_loss_weight=model.contr_loss_weight,
+            kl_warmup_epochs=model.kl_warmup_epochs,  # NEW: Pass warmup parameter
             device=device
         )
         
@@ -639,4 +705,3 @@ def extract_latent_space(self, data_loader, data_type):
     adata = ad.AnnData(np.concatenate(latent_spaces))
     adata.obs_names = sample_names        
     return adata
-

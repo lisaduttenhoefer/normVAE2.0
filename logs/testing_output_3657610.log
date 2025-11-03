@@ -1,0 +1,300 @@
+----------[INFO] Starting COMBINED deviation analysis (all volume types together)
+----------[INFO] Model directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438
+----------[INFO] Output directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438_20251103_161215
+----------[INFO] Loaded model configuration from /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438/config.csv
+----------[INFO] Using atlas: ['lpba40', 'neuromorphometrics', 'ibsr', 'aparc_dk40', 'aparc_destrieux']
+----------[INFO] Using latent dimension: 20
+----------[INFO] Using normative diagnosis: HC
+----------[INFO] Using volume type: ['Vgm', 'G', 'T']
+----------[INFO] Using valid volume types: ['Vgm', 'Vwm', 'Vcsf', 'G', 'T']
+----------[INFO] Using clinical mri data path: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+----------[INFO] Using metadata CSV: ['/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251103_1438.csv']
+----------[INFO] Using device: cuda
+----------[INFO] Loading clinical data...
+----------[INFO] Loading test data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251103_1438.csv
+----------[INFO] Using MRI data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv
+================================================================================
+[INFO] Loading PRE-NORMALIZED MRI data
+================================================================================
+[INFO] Selected atlases: ['lpba40', 'neuromorphometrics', 'ibsr', 'aparc_dk40', 'aparc_destrieux']
+[INFO] Target volume types: ['Vgm', 'G', 'T']
+[INFO] Loading metadata from: ["['/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/test_metadataHC_0.720251103_1438.csv']"]
+[INFO] Loaded metadata with 2213 subjects
+[INFO] Filtered to 2213 subjects with diagnoses: ['HC', 'MDD', 'SCHZ', 'CTT-SCHZ', 'CTT-MDD', 'BP', 'GenPop']
+[INFO] Loading pre-normalized MRI data from: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC.csv
+[INFO] Loaded MRI data with shape: (4163, 1211)
+[INFO] Found 1194 total ROI columns in MRI data
+[INFO] Filtering columns by selected atlases and volume types...
+[INFO] Processing atlas: lpba40 (prefix: lpba40)
+[INFO] Found 56 columns for atlas lpba40
+[INFO] Processing atlas: neuromorphometrics (prefix: Neurom)
+[INFO] Found 123 columns for atlas neuromorphometrics
+[INFO] Processing atlas: ibsr (prefix: IBSR)
+[INFO] Found 32 columns for atlas ibsr
+[INFO] Processing atlas: aparc_dk40 (prefix: DK40)
+[INFO] Found 137 columns for atlas aparc_dk40
+[INFO] Processing atlas: aparc_destrieux (prefix: Destrieux)
+[INFO] Found 296 columns for atlas aparc_destrieux
+[INFO] Selected 644 feature columns total after filtering
+[INFO]   - Vgm: 211 features
+[INFO]   - G: 216 features
+[INFO]   - T: 217 features
+[INFO] Matching metadata subjects with MRI data...
+[INFO] Successfully matched 2209/2213 subjects
+[WARNING] 4 subjects not found in MRI data
+[WARNING] Unmatched: ['sub-NDARINVTY904UNB_run01_T1w', 'sub-NDARINVGW978HUP_run01_T1w', 'sub-NDARINVHR360FAK_run01_T1w', 'sub-NDARINVLJ841ZFK_run01_T1w']
+[INFO] Total subjects processed: 2209
+[INFO] Total ROI features per subject: 644
+[INFO] Data loading complete!
+================================================================================
+----------[INFO] Clinical data shape: torch.Size([2209, 644])
+----------[INFO] Clinical data has 644 features
+----------[INFO] Annotations shape before filtering: 2213
+----------[INFO] Clinical data subjects: 2209
+----------[INFO] WARNING: Could not find subject ID column in annotations
+----------[INFO] Available columns: ['Filename', 'Dataset', 'Diagnosis', 'Age', 'Sex', 'Sex_int', 'Co_Diagnosis', 'ICD10_Code', 'GAF_Score', 'PANSS_Positive', 'PANSS_Negative', 'PANSS_General', 'PANSS_Total', 'BPRS_Total', 'NCRS_Motor', 'NCRS_Affective', 'NCRS_Behavioral', 'NCRS_Total', 'NSS_Motor', 'NSS_Total']
+----------[INFO] Fallback: Truncated annotations to first 2209 rows
+----------[INFO] Annotations shape after filtering: 2209
+----------[INFO] ✓ Annotations and clinical data are now aligned!
+----------[INFO] Loading bootstrap models...
+----------[INFO] Found 81 bootstrap models
+----------[INFO] Models were trained with input_dim: 644
+----------[INFO] Loaded model: baseline_model.pt
+----------[INFO] Loaded model: bootstrap_model_0.pt
+----------[INFO] Loaded model: bootstrap_model_1.pt
+----------[INFO] Loaded model: bootstrap_model_10.pt
+----------[INFO] Loaded model: bootstrap_model_11.pt
+----------[INFO] Loaded model: bootstrap_model_12.pt
+----------[INFO] Loaded model: bootstrap_model_13.pt
+----------[INFO] Loaded model: bootstrap_model_14.pt
+----------[INFO] Loaded model: bootstrap_model_15.pt
+----------[INFO] Loaded model: bootstrap_model_16.pt
+----------[INFO] Loaded model: bootstrap_model_17.pt
+----------[INFO] Loaded model: bootstrap_model_18.pt
+----------[INFO] Loaded model: bootstrap_model_19.pt
+----------[INFO] Loaded model: bootstrap_model_2.pt
+----------[INFO] Loaded model: bootstrap_model_20.pt
+----------[INFO] Loaded model: bootstrap_model_21.pt
+----------[INFO] Loaded model: bootstrap_model_22.pt
+----------[INFO] Loaded model: bootstrap_model_23.pt
+----------[INFO] Loaded model: bootstrap_model_24.pt
+----------[INFO] Loaded model: bootstrap_model_25.pt
+----------[INFO] Loaded model: bootstrap_model_26.pt
+----------[INFO] Loaded model: bootstrap_model_27.pt
+----------[INFO] Loaded model: bootstrap_model_28.pt
+----------[INFO] Loaded model: bootstrap_model_29.pt
+----------[INFO] Loaded model: bootstrap_model_3.pt
+----------[INFO] Loaded model: bootstrap_model_30.pt
+----------[INFO] Loaded model: bootstrap_model_31.pt
+----------[INFO] Loaded model: bootstrap_model_32.pt
+----------[INFO] Loaded model: bootstrap_model_33.pt
+----------[INFO] Loaded model: bootstrap_model_34.pt
+----------[INFO] Loaded model: bootstrap_model_35.pt
+----------[INFO] Loaded model: bootstrap_model_36.pt
+----------[INFO] Loaded model: bootstrap_model_37.pt
+----------[INFO] Loaded model: bootstrap_model_38.pt
+----------[INFO] Loaded model: bootstrap_model_39.pt
+----------[INFO] Loaded model: bootstrap_model_4.pt
+----------[INFO] Loaded model: bootstrap_model_40.pt
+----------[INFO] Loaded model: bootstrap_model_41.pt
+----------[INFO] Loaded model: bootstrap_model_42.pt
+----------[INFO] Loaded model: bootstrap_model_43.pt
+----------[INFO] Loaded model: bootstrap_model_44.pt
+----------[INFO] Loaded model: bootstrap_model_45.pt
+----------[INFO] Loaded model: bootstrap_model_46.pt
+----------[INFO] Loaded model: bootstrap_model_47.pt
+----------[INFO] Loaded model: bootstrap_model_48.pt
+----------[INFO] Loaded model: bootstrap_model_49.pt
+----------[INFO] Loaded model: bootstrap_model_5.pt
+----------[INFO] Loaded model: bootstrap_model_50.pt
+----------[INFO] Loaded model: bootstrap_model_51.pt
+----------[INFO] Loaded model: bootstrap_model_52.pt
+----------[INFO] Loaded model: bootstrap_model_53.pt
+----------[INFO] Loaded model: bootstrap_model_54.pt
+----------[INFO] Loaded model: bootstrap_model_55.pt
+----------[INFO] Loaded model: bootstrap_model_56.pt
+----------[INFO] Loaded model: bootstrap_model_57.pt
+----------[INFO] Loaded model: bootstrap_model_58.pt
+----------[INFO] Loaded model: bootstrap_model_59.pt
+----------[INFO] Loaded model: bootstrap_model_6.pt
+----------[INFO] Loaded model: bootstrap_model_60.pt
+----------[INFO] Loaded model: bootstrap_model_61.pt
+----------[INFO] Loaded model: bootstrap_model_62.pt
+----------[INFO] Loaded model: bootstrap_model_63.pt
+----------[INFO] Loaded model: bootstrap_model_64.pt
+----------[INFO] Loaded model: bootstrap_model_65.pt
+----------[INFO] Loaded model: bootstrap_model_66.pt
+----------[INFO] Loaded model: bootstrap_model_67.pt
+----------[INFO] Loaded model: bootstrap_model_68.pt
+----------[INFO] Loaded model: bootstrap_model_69.pt
+----------[INFO] Loaded model: bootstrap_model_7.pt
+----------[INFO] Loaded model: bootstrap_model_70.pt
+----------[INFO] Loaded model: bootstrap_model_71.pt
+----------[INFO] Loaded model: bootstrap_model_72.pt
+----------[INFO] Loaded model: bootstrap_model_73.pt
+----------[INFO] Loaded model: bootstrap_model_74.pt
+----------[INFO] Loaded model: bootstrap_model_75.pt
+----------[INFO] Loaded model: bootstrap_model_76.pt
+----------[INFO] Loaded model: bootstrap_model_77.pt
+----------[INFO] Loaded model: bootstrap_model_78.pt
+----------[INFO] Loaded model: bootstrap_model_79.pt
+----------[INFO] Loaded model: bootstrap_model_8.pt
+----------[INFO] Loaded model: bootstrap_model_9.pt
+----------[INFO] Successfully loaded 81 models
+----------[INFO] 
+================================================================================
+----------[INFO] RUNNING PRE-TESTING DIAGNOSTICS
+----------[INFO] ================================================================================
+----------[INFO] ✓ Loaded baseline model for diagnostics
+
+================================================================================
+STARTING VAE DIAGNOSTICS
+================================================================================
+
+============================================================
+Extracting latents for: HC
+============================================================
+----------[INFO] ⚠️  Warning: Could not complete diagnostics: not enough values to unpack (expected 3, got 2)
+----------[INFO] Traceback (most recent call last):
+  File "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/src/RUN_testing_normVAE2.py", line 349, in main
+    hc_results, mdd_results = run_full_diagnostics(
+                              ^^^^^^^^^^^^^^^^^^^^^
+  File "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/src/diagnose_vae.py", line 560, in run_full_diagnostics
+    hc_results = diagnostics.extract_latents_and_stats(hc_loader, group_name=hc_name)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/miniconda3/envs/LISA_ba_env/lib/python3.11/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/src/diagnose_vae.py", line 56, in extract_latents_and_stats
+    for batch_idx, (measurements, labels, names) in enumerate(data_loader):
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 3, got 2)
+
+----------[INFO] 
+================================================================================
+----------[INFO] STARTING COMBINED DEVIATION ANALYSIS
+----------[INFO] Analyzing ALL 644 features together (Vgm + G + T)
+----------[INFO] ================================================================================
+
+----------[INFO] 
+================================================================================
+----------[INFO] Computing MULTIPLE deviation score methods...
+----------[INFO] ================================================================================
+----------[INFO] 
+[1/5] Calculating BOOTSTRAP deviation scores (original method)...
+[INFO] Processing 81 bootstrap models...
+[INFO] Finished processing models
+[INFO] Using 644 ROI names for region columns
+
+[INFO] Normalizing deviation scores relative to HC...
+[INFO] Found 838 HC subjects for normalization reference
+[INFO] HC Reconstruction Error: mean=0.690160, std=0.160978
+[INFO] HC KL Divergence: mean=6.750329, std=0.928728
+[INFO] Z-Score normalization complete
+       HC mean deviation_score_zscore: -0.000
+       HC std deviation_score_zscore: 0.547
+[INFO] Percentile normalization complete
+       HC median percentile: 0.501
+[INFO] HC Recon range (5th-95th percentile): [0.503100, 0.988377]
+[INFO] HC KL range (5th-95th percentile): [4.944534, 8.037359]
+[INFO] Min-Max normalization complete
+       HC mean deviation_score: 0.479
+       HC std deviation_score: 0.151
+
+[INFO] Deviation Score Summary by Diagnosis:
+============================================================
+BP         (n=  2): score=0.587±0.119, zscore=0.360±0.380
+CTT-MDD    (n= 28): score=0.532±0.090, zscore=0.186±0.317
+CTT-SCHZ   (n= 55): score=0.510±0.140, zscore=0.238±1.091
+GenPop     (n= 92): score=0.490±0.175, zscore=0.019±0.573
+HC         (n=838): score=0.479±0.151, zscore=-0.000±0.547
+MDD        (n=328): score=0.577±0.164, zscore=0.324±0.562
+SCHZ       (n=866): score=0.514±0.159, zscore=0.175±0.914
+============================================================
+[INFO] Deviation calculation complete!
+
+----------[INFO]    HC subjects in test set: 838
+----------[INFO] 
+[2/5] Computing D_MSE (Reconstruction-based)...
+----------[INFO]    Range: [0.3578, 3.8894]
+----------[INFO]    HC mean: 0.6811 ± 0.1709
+----------[INFO] 
+[3/5] Computing D_KL (KL Divergence)...
+----------[INFO]    Range: [3.3028, 18.5126]
+----------[INFO]    HC mean: 6.5113 ± 1.0499
+----------[INFO] 
+[4/5] Computing D_latent (Aguila et al. method)...
+----------[INFO]    Range: [0.0721, 1.2326]
+----------[INFO]    HC mean: 0.4274 ± 0.1594
+----------[INFO] 
+[5/5] Computing D_combined (weighted combination)...
+----------[INFO]    Range: [0.0478, 1.0000]
+----------[INFO]    HC mean: 0.1274 ± 0.0326
+----------[INFO] 
+✓ Adding all deviation methods to results DataFrame...
+----------[INFO] ✓ All 5 deviation methods computed:
+----------[INFO]    1. deviation_score (Bootstrap)
+----------[INFO]    2. deviation_score_recon (D_MSE)
+----------[INFO]    3. deviation_score_kl (D_KL)
+----------[INFO]    4. deviation_score_latent_aguila (D_latent)
+----------[INFO]    5. deviation_score_combined (Weighted)
+----------[INFO] 
+================================================================================
+----------[INFO] CREATING ERRORBAR PLOTS FOR ALL 5 DEVIATION METRICS
+----------[INFO] ================================================================================
+
+[INFO] Creating errorbar plots (mean + median) for 7 deviation metrics...
+       Total plots to create: 14
+
+[INFO] Creating MEAN plots...
+  ✓ Created: zscore_errorbar_mean_ctt_combined.png
+  ✓ Created: percentile_errorbar_mean_ctt_combined.png
+  ✓ Created: score_errorbar_mean_ctt_combined.png
+  ✓ Created: recon_errorbar_mean_ctt_combined.png
+  ✓ Created: kl_errorbar_mean_ctt_combined.png
+  ✓ Created: latent_aguila_errorbar_mean_ctt_combined.png
+  ✓ Created: combined_errorbar_mean_ctt_combined.png
+
+[INFO] Creating MEDIAN plots...
+  ✓ Created: zscore_errorbar_median_ctt_combined.png
+  ✓ Created: percentile_errorbar_median_ctt_combined.png
+  ✓ Created: score_errorbar_median_ctt_combined.png
+  ✓ Created: recon_errorbar_median_ctt_combined.png
+  ✓ Created: kl_errorbar_median_ctt_combined.png
+  ✓ Created: latent_aguila_errorbar_median_ctt_combined.png
+  ✓ Created: combined_errorbar_median_ctt_combined.png
+
+[INFO] All 14 errorbar plots created!
+       - 7 MEAN plots (error bars = SEM)
+       - 7 MEDIAN plots (error bars = IQR)
+----------[INFO] ✓ Created errorbar plots for all 5 deviation metrics
+----------[INFO] 
+================================================================================
+----------[INFO] SAVING RESULTS
+----------[INFO] ================================================================================
+
+----------[INFO] Saved deviation scores (ALL methods) to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438_20251103_161215/deviation_scores_combined.csv
+----------[INFO] Saved summary statistics to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438_20251103_161215/deviation_score_summary.csv
+----------[INFO] 
+================================================================================
+----------[INFO] CREATING VISUALIZATIONS
+----------[INFO] ================================================================================
+
+----------[INFO] 
+================================================================================
+----------[INFO] REGIONAL DEVIATION ANALYSIS
+----------[INFO] ================================================================================
+
+
+[INFO] Starting MODIFIED regional deviation analysis...
+[INFO] ROI names formatted for plotting. Example: [GM] lSupFroG (lpba40)
+[INFO] Merged CTT-SCHZ and CTT-MDD into single CTT group
+[INFO] Filtered to 4 main diagnoses: ['HC', 'MDD', 'SCHZ', 'CTT']
+[INFO] Sample sizes after filtering:
+       HC: 838
+       MDD: 328
+       SCHZ: 866
+       CTT: 83
+[INFO] Found 644 regional z-score columns
+[INFO] Analyzing MDD (n=328) vs HC (n=838)
+[INFO] Analyzing SCHZ (n=866) vs HC (n=838)

@@ -19,6 +19,10 @@ import torchio as tio
 from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+
+from diagnose_vae import run_full_diagnostics
+
+
 matplotlib.use("Agg")
 
 
@@ -60,11 +64,12 @@ def create_arg_parser():
     parser = argparse.ArgumentParser(description='Arguments for Normative Modeling Training')
     parser.add_argument('--atlas_name', help='Name of the desired atlas for training.',  nargs='+', default=["all"])
     parser.add_argument('--volume_type', help='Volume type(s) to use', nargs='*', default=["Vgm", "Vwm", "Vcsf"])
-    parser.add_argument('--num_epochs', help='Number of epochs to be trained for', type=int, default=200)
-    parser.add_argument('--n_bootstraps', help='Number of bootstrap samples', type=int, default=100)
+    parser.add_argument('--num_epochs', help='Number of epochs to be trained for', type=int, default=250)
+    parser.add_argument('--n_bootstraps', help='Number of bootstrap samples', type=int, default=80)
+    parser.add_argument('--kl_warmup_epochs', type=int, default=50, help='Number of epochs for KL warmup')
     parser.add_argument('--norm_diagnosis', help='which diagnosis is considered the "norm"', type=str, default="HC")
     parser.add_argument('--train_ratio', help='Normpslit ratio', type=float, default=0.7)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=16)
+    parser.add_argument('--batch_size', help='Batch size', type=int, default=32)
     parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.000559)
     parser.add_argument('--latent_dim', help='Dimension of latent space', type=int, default=20) 
     parser.add_argument('--kldiv_weight', help='Weight for KL divergence loss', type=float, default=1.2)
@@ -84,7 +89,7 @@ def create_arg_parser():
 
 
 def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm_diagnosis: str, train_ratio: float, 
-         batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, 
+         batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, kl_warmup_epochs: int,
          no_cuda: bool, seed: int, normalization_method: str = 'rowwise', output_dir: str = None):
     ## 0. Set Up ----------------------------------------------------------
     # Set main paths
@@ -187,12 +192,14 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_and_print("Loading NORM control data...")
     
     # ========== MODIFIED: Pass normalization_method parameter ==========
-    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC.csv"
+    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC_separate_TRAIN.csv"
 
     subjects_train, train_overview, roi_names_train = load_mri_data_2D_prenormalized(
         normalized_csv_path=NORMALIZED_CSV,
         csv_paths=[TRAIN_CSV],
-        diagnoses=["HC"]
+        diagnoses=["HC"],
+        atlas_name=config.ATLAS_NAME,      
+        volume_type=config.VOLUME_TYPE     
     )
     
 
@@ -288,6 +295,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         kldiv_loss_weight=config.KLDIV_LOSS_WEIGHT,
         recon_loss_weight=config.RECON_LOSS_WEIGHT,
         contr_loss_weight=config.CONTR_LOSS_WEIGHT,
+        kl_warmup_epochs=kl_warmup_epochs,
         dropout_prob=0.1,
         device=device
     )
@@ -321,6 +329,47 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         save_models=save_models
     )
     
+    ##############
+
+# ========== DIAGNOSTIC ANALYSIS AFTER TRAINING ==========
+    log_and_print("\n" + "="*80)
+    log_and_print("RUNNING POST-TRAINING DIAGNOSTICS")
+    log_and_print("="*80)
+    
+    try:
+        # Run diagnostics comparing HC train vs HC validation
+        hc_train_results, hc_valid_results = run_full_diagnostics(
+            model=baseline_model,
+            hc_loader=train_loader_norm,
+            patient_loader=valid_loader_norm,
+            hc_name="HC_train",
+            patient_name="HC_valid",
+            save_dir=f"{save_dir}/diagnostics_post_training"
+        )
+        
+        log_and_print("✓ Post-training diagnostics completed")
+        log_and_print(f"  Diagnostic plots saved to: {save_dir}/diagnostics_post_training/")
+        
+        # Log key findings
+        hc_train_kl = hc_train_results['kl_per_sample'].mean()
+        hc_valid_kl = hc_valid_results['kl_per_sample'].mean()
+        
+        log_and_print(f"\nKey Findings:")
+        log_and_print(f"  HC Train KL: {hc_train_kl:.4f}")
+        log_and_print(f"  HC Valid KL: {hc_valid_kl:.4f}")
+        log_and_print(f"  Collapsed dimensions: {hc_train_results['collapse_stats']['collapsed_dims']}/{latent_dim}")
+        
+        if hc_train_results['collapse_stats']['collapsed_dims'] > 0:
+            log_and_print(f"  ⚠️  WARNING: Posterior collapse detected!")
+        
+    except Exception as e:
+        log_and_print(f"⚠️  Warning: Could not complete diagnostics: {e}")
+        import traceback
+        log_and_print(traceback.format_exc())
+    
+    # ========== END OF DIAGNOSTIC CODE ==========
+
+    ##############
     log_and_print(f"Successfully trained {len(bootstrap_models)} bootstrap models")
 
     # Calculate and visualize overall performance
@@ -342,6 +391,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         "learning_rate": learning_rate,
         "latent_dim": latent_dim,
         "kldiv_weight": kldiv_weight,
+        "kl_warmup_epochs": kl_warmup_epochs,
         "hidden_dim_1": hidden_dim_1,
         "hidden_dim_2": hidden_dim_2,
         "input_dim": len_atlas,
@@ -385,6 +435,7 @@ if __name__ == "__main__":
         learning_rate=args.learning_rate,
         latent_dim=args.latent_dim,
         kldiv_weight=args.kldiv_weight,
+        kl_warmup_epochs=args.kl_warmup_epochs,
         save_models=args.save_models,
         no_cuda=args.no_cuda,
         seed=args.seed,

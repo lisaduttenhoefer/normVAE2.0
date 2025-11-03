@@ -463,13 +463,14 @@ import numpy as np
 import os
 import re
 from typing import List, Tuple
-
-
 def load_mri_data_2D_prenormalized(
-    normalized_csv_path: str,  # NEW! Path to pre-normalized CSV
+    normalized_csv_path: str,
     csv_paths: List[str] = None,
     diagnoses: List[str] = None,
     covars: List[str] = [],
+    atlas_name: List[str] = None,
+    volume_type = None,
+    valid_volume_types: List[str] = ["Vgm", "Vwm", "Vcsf", "G", "T"],
 ) -> Tuple:
     """
     Load pre-normalized MRI data and filter to requested subjects.
@@ -479,6 +480,9 @@ def load_mri_data_2D_prenormalized(
         csv_paths: List of metadata CSV paths (determines train/test split)
         diagnoses: List of diagnoses to include (None = all)
         covars: List of covariates for one-hot encoding
+        atlas_name: List of atlas names to include (None or ["all"] = all available atlases)
+        volume_type: Volume type(s) to include (None or "all" = all types, str or list)
+        valid_volume_types: All valid volume type prefixes
         
     Returns:
         subjects: List of subject dictionaries
@@ -489,6 +493,47 @@ def load_mri_data_2D_prenormalized(
     print("="*80)
     print("[INFO] Loading PRE-NORMALIZED MRI data")
     print("="*80)
+    
+    # ==================== ATLAS MAPPING ====================
+    atlas_mapping = {
+        "neuromorphometrics": "Neurom",
+        "lpba40": "lpba40",
+        "cobra": "cobra",
+        "suit": "SUIT",
+        "ibsr": "IBSR",
+        "aal3": "AAL3",
+        "schaefer100": "Sch100",
+        "schaefer200": "Sch200",
+        "aparc_dk40": "DK40",
+        "aparc_destrieux": "Destrieux"
+    }
+    
+    all_available_atlases = list(atlas_mapping.keys())
+    
+    # ==================== HANDLE ATLAS SELECTION ====================
+    if atlas_name is None or (isinstance(atlas_name, list) and len(atlas_name) == 1 and atlas_name[0] == "all"):
+        selected_atlases = all_available_atlases
+    elif not isinstance(atlas_name, list):
+        selected_atlases = [atlas_name]
+    else:
+        selected_atlases = atlas_name
+    
+    print(f"[INFO] Selected atlases: {selected_atlases}")
+    
+    # ==================== HANDLE VOLUME TYPE SELECTION ====================
+    if volume_type is None or volume_type == "all":
+        target_volume_types = valid_volume_types
+    elif isinstance(volume_type, str):
+        target_volume_types = [volume_type]
+    elif isinstance(volume_type, list):
+        if len(volume_type) == 1 and volume_type[0] == "all":
+            target_volume_types = valid_volume_types
+        else:
+            target_volume_types = volume_type
+    else:
+        target_volume_types = valid_volume_types
+    
+    print(f"[INFO] Target volume types: {target_volume_types}")
     
     # ==================== STEP 1: Load Metadata ====================
     print(f"[INFO] Loading metadata from: {csv_paths}")
@@ -523,7 +568,7 @@ def load_mri_data_2D_prenormalized(
     mri_data = pd.read_csv(normalized_csv_path)
     print(f"[INFO] Loaded MRI data with shape: {mri_data.shape}")
     
-    # ==================== STEP 4: Identify ROI Columns ====================
+    # ==================== STEP 4: Identify All ROI Columns ====================
     # ROI columns are everything except metadata columns
     metadata_columns = [
         'Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV',
@@ -531,21 +576,59 @@ def load_mri_data_2D_prenormalized(
         'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
         'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global'
     ]
-    roi_columns = [col for col in mri_data.columns if col not in metadata_columns]
+    all_roi_columns = [col for col in mri_data.columns if col not in metadata_columns]
     
-    print(f"[INFO] Found {len(roi_columns)} ROI columns")
+    print(f"[INFO] Found {len(all_roi_columns)} total ROI columns in MRI data")
     
-    # Count by volume type
-    vgm_cols = [col for col in roi_columns if col.startswith('Vgm_')]
-    g_cols = [col for col in roi_columns if col.startswith('G_')]
-    t_cols = [col for col in roi_columns if col.startswith('T_')]
+    # ==================== STEP 5: Filter ROI Columns by Atlas and Volume Type ====================
+    print(f"[INFO] Filtering columns by selected atlases and volume types...")
     
-    print(f"[INFO]   - Vgm: {len(vgm_cols)} features")
-    print(f"[INFO]   - G: {len(g_cols)} features")
-    print(f"[INFO]   - T: {len(t_cols)} features")
-    print(f"[INFO]   - Total: {len(roi_columns)} features")
+    selected_columns = []
+    all_roi_names = []
     
-    # ==================== STEP 5: Prepare One-Hot Labels ====================
+    for atlas in selected_atlases:
+        atlas_prefix = atlas_mapping.get(atlas)
+        if atlas_prefix is None:
+            print(f"[WARNING] Unknown atlas: {atlas}, skipping")
+            continue
+        
+        print(f"[INFO] Processing atlas: {atlas} (prefix: {atlas_prefix})")
+        
+        atlas_columns = []
+        
+        for col in all_roi_columns:
+            # Check if column belongs to this atlas
+            if f"_{atlas_prefix}_" in col:
+                # Check if it matches one of the volume types
+                for vt in target_volume_types:
+                    if col.startswith(f"{vt}_"):
+                        atlas_columns.append(col)
+                        break
+        
+        if not atlas_columns:
+            print(f"[WARNING] No columns found for atlas {atlas} with selected volume types")
+            continue
+        
+        print(f"[INFO] Found {len(atlas_columns)} columns for atlas {atlas}")
+        selected_columns.extend(atlas_columns)
+        all_roi_names.extend(atlas_columns)
+    
+    # Remove duplicates while preserving order
+    selected_columns = list(dict.fromkeys(selected_columns))
+    all_roi_names = list(dict.fromkeys(all_roi_names))
+    
+    print(f"[INFO] Selected {len(selected_columns)} feature columns total after filtering")
+    
+    # Count by volume type for information
+    for vt in target_volume_types:
+        vt_cols = [col for col in selected_columns if col.startswith(f'{vt}_')]
+        if vt_cols:
+            print(f"[INFO]   - {vt}: {len(vt_cols)} features")
+    
+    if not selected_columns:
+        raise ValueError(f"[ERROR] No ROI columns found matching atlases {selected_atlases} and volume types {target_volume_types}!")
+    
+    # ==================== STEP 6: Prepare One-Hot Labels ====================
     covars = [covars] if not isinstance(covars, list) else covars
     
     one_hot_labels = {}
@@ -556,8 +639,11 @@ def load_mri_data_2D_prenormalized(
             raise ValueError(f"[ERROR] Column '{var}' not found in metadata")
         one_hot_labels[var] = pd.get_dummies(data_overview[var], dtype=float)
     
-    # ==================== STEP 6: Match Subjects ====================
+    # ==================== STEP 7: Match Subjects ====================
     print("[INFO] Matching metadata subjects with MRI data...")
+    
+    # Create filename lookup with multiple variant handling
+    mri_filenames = set(mri_data['Filename'])
     
     subjects_dict = {}
     matched_count = 0
@@ -566,20 +652,32 @@ def load_mri_data_2D_prenormalized(
     for index, row in data_overview.iterrows():
         filename = row["Filename"]
         
-        # Try to find in MRI data
-        # Handle potential differences in filename format
+        # Clean filename (remove extension)
         filename_clean = re.sub(r"\.[^.]+$", "", filename)
         
-        mri_row = mri_data[mri_data['Filename'] == filename]
-        if mri_row.empty:
-            mri_row = mri_data[mri_data['Filename'] == filename_clean]
+        # Try to find match with multiple variants (similar to old function)
+        matched_filename = None
         
-        if mri_row.empty:
+        # Variant 1: Direct match
+        if filename in mri_filenames:
+            matched_filename = filename
+        # Variant 2: Cleaned filename
+        elif filename_clean in mri_filenames:
+            matched_filename = filename_clean
+        # Variant 3: With 'sub-' prefix
+        elif f"sub-{filename_clean}" in mri_filenames:
+            matched_filename = f"sub-{filename_clean}"
+        # Variant 4: Without 'sub-' prefix
+        elif filename_clean.startswith('sub-') and filename_clean[4:] in mri_filenames:
+            matched_filename = filename_clean[4:]
+        
+        if matched_filename is None:
             unmatched.append(filename)
             continue
         
         # Extract ROI measurements (already normalized!)
-        measurements = mri_row[roi_columns].values.flatten().tolist()
+        # Use explicit float32 conversion for consistency
+        measurements = mri_data[mri_data['Filename'] == matched_filename][selected_columns].values.flatten().astype(np.float32).tolist()
         
         # Create subject entry
         subjects_dict[filename] = {
@@ -596,16 +694,21 @@ def load_mri_data_2D_prenormalized(
         print(f"[WARNING] {len(unmatched)} subjects not found in MRI data")
         if len(unmatched) <= 10:
             print(f"[WARNING] Unmatched: {unmatched}")
+        else:
+            print(f"[WARNING] First 10 unmatched: {unmatched[:10]}")
     
-    # ==================== STEP 7: Convert to List ====================
+    # ==================== STEP 8: Convert to List ====================
     subjects = list(subjects_dict.values())
     
+    if not subjects:
+        raise ValueError("[ERROR] No subjects matched between metadata and MRI data!")
+    
     print(f"[INFO] Total subjects processed: {len(subjects)}")
-    print(f"[INFO] Total ROI features per subject: {len(roi_columns)}")
+    print(f"[INFO] Total ROI features per subject: {len(all_roi_names)}")
     print("[INFO] Data loading complete!")
     print("="*80)
     
-    return subjects, data_overview, roi_columns
+    return subjects, data_overview, all_roi_names
 
 
 # ==================== HELPER FUNCTION ====================
@@ -674,6 +777,8 @@ def load_mri_data_2D(
         "schaefer100": "Sch100",
         "schaefer200": "Sch200",
         "aparc_dk40": "DK40",
+        "dk40" : "DK40",
+        "destrieux" : "Destrieux",
         "aparc_destrieux": "Destrieux"
     }
     
