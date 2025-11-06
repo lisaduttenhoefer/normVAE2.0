@@ -50,6 +50,7 @@ from utils.plotting_utils import (
     plot_learning_curves,
     plot_bootstrap_metrics,
 )
+
 # ContrastVAE_2D Model Class
 class NormativeVAE_2D(nn.Module):
     def __init__(
@@ -57,6 +58,7 @@ class NormativeVAE_2D(nn.Module):
         recon_loss_weight,
         kldiv_loss_weight,
         contr_loss_weight,
+        beta=4.0,  # ← NEU: β-VAE Parameter (Standard: 4.0, für normalen VAE: 1.0)
         contr_temperature=0.1,
         input_dim:int = None, 
         hidden_dim_1=100, #based on Pinaya
@@ -69,7 +71,7 @@ class NormativeVAE_2D(nn.Module):
         schedule_on_validation=True,
         scheduler_patience=10,
         scheduler_factor=0.5,
-        kl_warmup_epochs=50,  # NEW: Number of epochs for KL warmup
+        kl_warmup_epochs=50,  # Number of epochs for KL warmup
         
     ):
         super(NormativeVAE_2D, self).__init__()
@@ -80,7 +82,10 @@ class NormativeVAE_2D(nn.Module):
         self.hidden_dim_2 = hidden_dim_2
         self.latent_dim = latent_dim
         
-        # NEW: KL warmup parameters
+        # β-VAE parameter
+        self.beta = beta  # ← NEU: β gespeichert
+        
+        # KL warmup parameters
         self.kl_warmup_epochs = kl_warmup_epochs
         self.current_epoch = 0  # Track current epoch for warmup
         
@@ -164,22 +169,18 @@ class NormativeVAE_2D(nn.Module):
         # Initialize weights
         self.apply(self._init_weights)
     
-    # NEW: Method to get current KL weight with warmup
     def get_kl_weight(self):
         """
         Gradually increase KL weight from 0 to target weight over warmup_epochs.
         This prevents posterior collapse by allowing the encoder to learn 
         meaningful representations before enforcing the N(0,1) prior.
-        
-        MODIFIED: Using much higher final weight to combat collapse
         """
         if self.current_epoch < self.kl_warmup_epochs:
             # Linear warmup
             warmup_factor = self.current_epoch / self.kl_warmup_epochs
-            # CHANGED: Multiply by 4 to get much stronger KL penalty
             return warmup_factor * self.kldiv_loss_weight * 4.0
         else:
-            # Full weight after warmup - CHANGED: 4x stronger
+            # Full weight after warmup
             return self.kldiv_loss_weight * 4.0
             
     #Initialize weights for linear layers
@@ -229,10 +230,15 @@ class NormativeVAE_2D(nn.Module):
             recon, _, _ = self(x)
         return recon
     
-    # MODIFIED: VAE loss function with KL warmup AND Free Bits
+    # ← GEÄNDERT: β-VAE loss function mit KL warmup UND β
     def loss_function(self, recon_x, x, mu, logvar, free_bits=0.5):
         """
-        VAE loss with KL warmup and Free Bits.
+        β-VAE loss with KL warmup and Free Bits.
+        
+        Beta (β) controls disentanglement:
+        - β = 1: Standard VAE (keine zusätzliche Regularisierung)
+        - β > 1: Stärkeres Disentanglement (z.B. β=4 ist typisch)
+        - β < 1: Schwächere Regularisierung
         
         Free Bits: Don't penalize KL below 'free_bits' per dimension.
         This prevents complete collapse while still allowing meaningful structure.
@@ -250,9 +256,9 @@ class NormativeVAE_2D(nn.Module):
         # Sum across latent dimensions, mean across batch
         kldiv_loss_raw = kl_per_dim_clamped.sum(dim=1).mean()
         
-        # MODIFIED: Apply dynamic KL weight with warmup
+        # ← GEÄNDERT: Apply dynamic KL weight with warmup UND β
         current_kl_weight = self.get_kl_weight()
-        kldiv_loss = kldiv_loss_raw * current_kl_weight
+        kldiv_loss = kldiv_loss_raw * current_kl_weight * self.beta  # ← β hier angewendet
         
         # total loss
         total_loss = recon_loss + kldiv_loss
@@ -260,9 +266,8 @@ class NormativeVAE_2D(nn.Module):
         return total_loss, recon_loss, kldiv_loss
     
 
-    # MODIFIED: Trains for one epoch - now updates epoch counter
     def train_one_epoch(self, train_loader: DataLoader, epoch: int) -> Dict[str, float]:
-        # NEW: Update current epoch for KL warmup
+        # Update current epoch for KL warmup
         self.current_epoch = epoch
         current_kl_weight = self.get_kl_weight()
         
@@ -290,7 +295,7 @@ class NormativeVAE_2D(nn.Module):
                 # Forward pass
                 recon_data, mu, logvar = self(batch_measurements)
                 
-                # Calculate loss - FIXED: Use correct parameters
+                # Calculate loss
                 b_total_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
                     recon_x=recon_data,
                     x=batch_measurements,
@@ -315,7 +320,7 @@ class NormativeVAE_2D(nn.Module):
             # Update weights
             self.scaler.step(self.optimizer)
             self.scaler.update()
-            #self.optimizer.zero_grad()
+            
             # Update loss stats
             total_loss += b_total_loss.item()
             contr_loss += b_contr_loss.item()
@@ -336,15 +341,16 @@ class NormativeVAE_2D(nn.Module):
             "t_contr_loss": contr_loss / len(train_loader.dataset),
             "t_recon_loss": recon_loss / len(train_loader.dataset),
             "t_kldiv_loss": kldiv_loss / len(train_loader.dataset),
-            "kl_weight": current_kl_weight,  # NEW: Log current KL weight
+            "kl_weight": current_kl_weight,
+            "beta": self.beta,  # ← NEU: β zum Logging hinzugefügt
         }
         
         # Calculate loss proportions
         epoch_props = loss_proportions("train_loss", epoch_metrics)
     
-        # NEW: Log KL warmup progress
+        # Log KL warmup progress
         if epoch <= self.kl_warmup_epochs:
-            logging.info(f"KL Warmup: Epoch {epoch}/{self.kl_warmup_epochs}, KL weight: {current_kl_weight:.4f}")
+            logging.info(f"KL Warmup: Epoch {epoch}/{self.kl_warmup_epochs}, KL weight: {current_kl_weight:.4f}, β: {self.beta:.2f}")
         
         log_model_metrics(epoch, epoch_props, type="Training Metrics:")
         
@@ -357,10 +363,9 @@ class NormativeVAE_2D(nn.Module):
         
         return epoch_metrics
     
-    # MODIFIED: validation - now updates epoch counter
     @torch.no_grad()
     def validate(self, valid_loader, epoch) -> Dict[str, float]:
-        # NEW: Update current epoch for KL warmup
+        # Update current epoch for KL warmup
         self.current_epoch = epoch
         current_kl_weight = self.get_kl_weight()
         
@@ -385,7 +390,7 @@ class NormativeVAE_2D(nn.Module):
             with torch.cuda.amp.autocast(enabled=True):
                 recon_data, mu, logvar = self(batch_measurements)
                 
-                # Calculate loss - FIXED: Use correct parameters
+                # Calculate loss
                 b_total_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
                     recon_x=recon_data,
                     x=batch_measurements,
@@ -411,7 +416,8 @@ class NormativeVAE_2D(nn.Module):
             "v_contr_loss": contr_loss / len(valid_loader.dataset),
             "v_recon_loss": recon_loss / len(valid_loader.dataset),
             "v_kldiv_loss": kldiv_loss / len(valid_loader.dataset),
-            "kl_weight": current_kl_weight,  # NEW: Log current KL weight
+            "kl_weight": current_kl_weight,
+            "beta": self.beta,  # ← NEU: β zum Logging hinzugefügt
         }
     
         epoch_props = loss_proportions("valid_loss", epoch_metrics)
@@ -428,7 +434,7 @@ class NormativeVAE_2D(nn.Module):
         return epoch_metrics
     
     
-# MODIFIED: TRAINING FUNCTION with epoch tracking for warmup
+# TRAINING FUNCTION with epoch tracking for warmup
 def train_normative_model_plots(train_data, valid_data, model, epochs, batch_size, save_best=True, return_history=True):
     
     device = model.device
@@ -440,13 +446,15 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         'val_loss': [],
         'recon_loss': [],
         'kl_loss': [],
-        'kl_weight': [],  # NEW: Track KL weight over time
+        'kl_weight': [],
+        'beta': model.beta,  # ← NEU: β im History gespeichert
         'best_epoch': 0,
         'best_val_loss': float('inf')
     }
     
     # Create data loaders
     log_and_print(f"Training data shape IM MODEL: {train_data.shape}")
+    log_and_print(f"Using β-VAE with β={model.beta:.2f}")  # ← NEU: β loggen
     train_dataset = torch.utils.data.TensorDataset(train_data)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
@@ -456,7 +464,7 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
     best_model_state = None
     
     for epoch in range(epochs):
-        # NEW: Update model's epoch counter
+        # Update model's epoch counter
         model.current_epoch = epoch
         current_kl_weight = model.get_kl_weight()
         
@@ -509,7 +517,7 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         history['val_loss'].append(val_loss)
         history['recon_loss'].append(train_recon_loss)
         history['kl_loss'].append(train_kl_loss)
-        history['kl_weight'].append(current_kl_weight)  # NEW: Track KL weight
+        history['kl_weight'].append(current_kl_weight)
         
         # Save best model based on validation loss
         if val_loss < history['best_val_loss']:
@@ -521,7 +529,7 @@ def train_normative_model_plots(train_data, valid_data, model, epochs, batch_siz
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs-1:
             log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
                          f"Val Loss: {val_loss:.4f}, Recon: {train_recon_loss:.4f}, "
-                         f"KL: {train_kl_loss:.4f}, KL_weight: {current_kl_weight:.4f}")  # NEW: Log KL weight
+                         f"KL: {train_kl_loss:.4f}, KL_weight: {current_kl_weight:.4f}, β: {model.beta:.2f}")  # ← NEU: β loggen
     
     # Load best model if available
     if save_best and best_model_state is not None:
@@ -551,7 +559,8 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
     os.makedirs(loss_dir, exist_ok=True)
     
     log_and_print(f"Starting bootstrap training with {n_bootstraps} iterations")
-    log_and_print(f"KL warmup will occur over first {model.kl_warmup_epochs} epochs")  # NEW
+    log_and_print(f"KL warmup will occur over first {model.kl_warmup_epochs} epochs")
+    log_and_print(f"Using β-VAE with β={model.beta:.2f}")  # ← NEU: β loggen
     
     # Combine training and validation data for visualization
     combined_data = torch.cat([train_data, valid_data], dim=0)
@@ -575,7 +584,8 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
             dropout_prob=model.dropout_prob,
             recon_loss_weight=model.recon_loss_weight,
             contr_loss_weight=model.contr_loss_weight,
-            kl_warmup_epochs=model.kl_warmup_epochs,  # NEW: Pass warmup parameter
+            kl_warmup_epochs=model.kl_warmup_epochs,
+            beta=model.beta,  # ← NEU: β übergeben
             device=device
         )
         
@@ -598,7 +608,8 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
             'final_recon_loss': history['recon_loss'][-1],
             'final_kl_loss': history['kl_loss'][-1],
             'best_epoch': history['best_epoch'],
-            'best_val_loss': history['best_val_loss']
+            'best_val_loss': history['best_val_loss'],
+            'beta': history['beta']  # ← NEU: β in Metriken
         }
         
         bootstrap_models.append(trained_model)
@@ -624,7 +635,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
         plt.plot(history['val_loss'], alpha=0.3, color='blue')
     plt.plot([np.mean([h['val_loss'][e] for h in all_losses]) for e in range(epochs)], 
              linewidth=2, color='red', label='Mean Validation Loss')
-    plt.title('Validation Loss Across Bootstrap Models')
+    plt.title(f'Validation Loss Across Bootstrap Models (β={model.beta:.2f})')  # ← NEU
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
@@ -635,7 +646,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
         plt.plot(history['train_loss'], alpha=0.3, color='green')
     plt.plot([np.mean([h['train_loss'][e] for h in all_losses]) for e in range(epochs)], 
              linewidth=2, color='red', label='Mean Training Loss')
-    plt.title('Training Loss Across Bootstrap Models')
+    plt.title(f'Training Loss Across Bootstrap Models (β={model.beta:.2f})')  # ← NEU
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
@@ -646,7 +657,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
         plt.plot(history['recon_loss'], alpha=0.3, color='purple')
     plt.plot([np.mean([h['recon_loss'][e] for h in all_losses]) for e in range(epochs)], 
              linewidth=2, color='red', label='Mean Reconstruction Loss')
-    plt.title('Reconstruction Loss Across Bootstrap Models')
+    plt.title(f'Reconstruction Loss Across Bootstrap Models (β={model.beta:.2f})')  # ← NEU
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
@@ -657,7 +668,7 @@ def bootstrap_train_normative_models_plots(train_data, valid_data, model, n_boot
         plt.plot(history['kl_loss'], alpha=0.3, color='orange')
     plt.plot([np.mean([h['kl_loss'][e] for h in all_losses]) for e in range(epochs)], 
              linewidth=2, color='red', label='Mean KL Divergence Loss')
-    plt.title('KL Divergence Loss Across Bootstrap Models')
+    plt.title(f'KL Divergence Loss Across Bootstrap Models (β={model.beta:.2f})')  # ← NEU
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()

@@ -146,7 +146,7 @@ def main(args):
         valid_volume_types = ["Vgm", "Vwm", "Vcsf", "G", "T"]
         mri_data_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
         metadata_test = args.clinical_csv
-        metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
+        metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata_no_bad_scans.csv"
         hidden_dim_1 = 100
         hidden_dim_2 = 100
         

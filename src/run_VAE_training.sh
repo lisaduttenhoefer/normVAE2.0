@@ -28,8 +28,8 @@ export PYTHONUNBUFFERED=1
 
 # Alles nur ins training_output log
 python -u src/RUN_training_normVAE2.py \
-    --atlas_name lpba40 neuromorphometrics ibsr aparc_dk40 aparc_destrieux \
-    --volume_type Vgm G T \
+    --atlas_name DK40 destrieux \
+    --volume_type G \
     --normalization_method columnwise  &> logs/training_output_${SLURM_JOB_ID}.log
 
 echo "Job finished at $(date)"

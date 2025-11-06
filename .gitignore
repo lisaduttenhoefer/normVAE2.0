@@ -4,3 +4,5 @@ analysis/
 data/
 /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training
 data_training/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/logs
+logs/

@@ -1,0 +1,792 @@
+record_id,Age,Sex,Diagnosis,Dataset,TIV,Site,Scanner
+sub-0374,27.0,Female,HC,SRBPS,1451.10598023964,Hiroshima University Hospital,GE Signa HDxt
+sub-1078,31.0,Female,HC,SRBPS,1455.7924232256,University of Tokyo,GE Discovery MR750w
+sub-0168,21.0,Female,HC,SRBPS,1580.86452156863,Showa university,SIEMENS  Verio
+sub-1061,33.0,Female,HC,SRBPS,1462.6446871614,University of Tokyo,GE Discovery MR750w
+sub-0861,37.0,Female,HC,SRBPS,1333.51567995024,Kyoto university,SIEMENS  TimTrio
+sub-0640,60.0,Female,HC,SRBPS,1433.54421568627,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0655,48.0,Female,HC,SRBPS,1571.40598039216,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0409,30.0,Female,HC,SRBPS,1432.3378696916,Hiroshima University Hospital,GE Signa HDxt
+sub-0649,43.0,Female,HC,SRBPS,1323.3278745098,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0842,66.0,Female,HC,SRBPS,1314.89446200838,Kyoto university,SIEMENS  TimTrio
+sub-0501,46.0,Female,HC,SRBPS,1530.74670196078,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1042,47.0,Female,HC,SRBPS,1276.15627678938,University of Tokyo,GE Discovery MR750w
+sub-0976,20.0,Female,HC,SRBPS,1542.89048537489,Kyoto university ,SIEMENS Trio
+sub-0176,21.0,Female,HC,SRBPS,1351.25852941176,Showa university,SIEMENS  Verio
+sub-0936,20.0,Female,HC,SRBPS,1485.77124282755,Kyoto university ,SIEMENS Trio
+sub-0556,66.0,Female,HC,SRBPS,1439.95572941176,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1092,42.0,Female,HC,SRBPS,1367.12578781638,University of Tokyo,GE Discovery MR750w
+sub-0650,47.0,Female,HC,SRBPS,1444.12562352941,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1075,44.0,Female,HC,SRBPS,1417.77751380353,University of Tokyo,GE Discovery MR750w
+sub-0854,53.0,Female,HC,SRBPS,1517.85681057785,Kyoto university,SIEMENS  TimTrio
+sub-1041,48.0,Female,HC,SRBPS,1342.22000378229,University of Tokyo,GE Discovery MR750w
+sub-1103,49.0,Female,HC,SRBPS,1388.11563535383,University of Tokyo,GE Discovery MR750w
+sub-0962,19.0,Female,HC,SRBPS,1478.60867064295,Kyoto university ,SIEMENS Trio
+sub-1362,53.0,Female,HC,SRBPS,1481.58017681871,CiNet,SIEMENS TimTrio
+sub-0348,61.0,Female,HC,SRBPS,1358.88386516888,Hiroshima University Hospital,GE Signa HDxt
+sub-0754,33.0,Female,HC,SRBPS,1366.0979036482,Kyoto university,SIEMENS  TimTrio
+sub-0633,53.0,Female,HC,SRBPS,1439.30203529412,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0312,34.0,Female,HC,SRBPS,1585.30492564539,Hiroshima University Hospital,GE Signa HDxt
+sub-0304,25.0,Female,HC,SRBPS,1338.83487177413,Hiroshima University Hospital,GE Signa HDxt
+sub-1363,48.0,Female,HC,SRBPS,1344.89539915793,CiNet,SIEMENS TimTrio
+sub-0853,22.0,Female,HC,SRBPS,1318.68926244513,Kyoto university,SIEMENS  TimTrio
+sub-1003,31.0,Female,HC,SRBPS,1288.13142025282,Kyoto university ,SIEMENS Trio
+sub-0639,42.0,Female,HC,SRBPS,1326.79584705882,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1031,74.0,Female,HC,SRBPS,1231.94714486195,University of Tokyo,GE Discovery MR750w
+sub-0272,23.0,Female,HC,SRBPS,1470.17775180652,Hiroshima University Hospital,GE Signa HDxt
+sub-0870,19.0,Female,HC,SRBPS,1450.29562610417,Kyoto university,SIEMENS  TimTrio
+sub-0996,51.0,Female,HC,SRBPS,1414.49387768882,Kyoto university ,SIEMENS Trio
+sub-0648,22.0,Female,HC,SRBPS,1341.38528627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0398,52.0,Female,HC,SRBPS,1551.752373226,Hiroshima University Hospital,GE Signa HDxt
+sub-0667,43.0,Female,HC,SRBPS,1446.51324705882,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0258,23.0,Female,HC,SRBPS,1495.16098949004,Hiroshima University Hospital,GE Signa HDxt
+sub-0722,48.0,Female,HC,SRBPS,1455.88531133645,Kyoto university,SIEMENS  TimTrio
+sub-1328,20.0,Female,HC,SRBPS,1421.70597441333,ATR ,SIEMENS Verio
+sub-0728,31.0,Female,HC,SRBPS,1456.52243952972,Kyoto university,SIEMENS  TimTrio
+sub-0810,43.0,Female,HC,SRBPS,1375.67303803184,Kyoto university,SIEMENS  TimTrio
+sub-0324,44.0,Female,HC,SRBPS,1544.5942254595,Hiroshima University Hospital,GE Signa HDxt
+sub-0238,25.0,Female,HC,SRBPS,1367.64504010981,Hiroshima University Hospital,GE Signa HDxt
+sub-1046,61.0,Female,HC,SRBPS,1323.74602369721,University of Tokyo,GE Discovery MR750w
+sub-0322,37.0,Female,HC,SRBPS,1539.24979379016,Hiroshima University Hospital,GE Signa HDxt
+sub-0298,20.0,Female,HC,SRBPS,1304.79237958981,Hiroshima University Hospital,GE Signa HDxt
+sub-0643,47.0,Female,HC,SRBPS,1511.74036862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0431,42.0,Female,HC,SRBPS,1260.69297049872,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0362,53.0,Female,HC,SRBPS,1343.87653427816,Hiroshima University Hospital,GE Signa HDxt
+sub-0831,41.0,Female,HC,SRBPS,1363.98091532614,Kyoto university,SIEMENS  TimTrio
+sub-0989,31.0,Female,HC,SRBPS,1320.86492153627,Kyoto university ,SIEMENS Trio
+sub-0729,57.0,Female,HC,SRBPS,1286.86500052783,Kyoto university,SIEMENS  TimTrio
+sub-1383,31.0,Female,HC,SRBPS,1403.03581089214,CiNet,SIEMENS TimTrio
+sub-0278,21.0,Female,HC,SRBPS,1345.97651630849,Hiroshima University Hospital,GE Signa HDxt
+sub-0865,22.0,Female,HC,SRBPS,1474.61667726761,Kyoto university,SIEMENS  TimTrio
+sub-1096,49.0,Female,HC,SRBPS,1252.702595082,University of Tokyo,GE Discovery MR750w
+sub-0630,54.0,Female,HC,SRBPS,1307.22974509804,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0644,48.0,Female,HC,SRBPS,1450.81721176471,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0656,48.0,Female,HC,SRBPS,1508.86412156863,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0664,46.0,Female,HC,SRBPS,1430.27148627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0413,49.0,Female,HC,SRBPS,1411.2287482773,Hiroshima University Hospital,GE Signa HDxt
+sub-0359,40.0,Female,HC,SRBPS,1540.27636233513,Hiroshima University Hospital,GE Signa HDxt
+sub-0403,53.0,Female,HC,SRBPS,1619.92018910143,Hiroshima University Hospital,GE Signa HDxt
+sub-0550,41.0,Female,HC,SRBPS,1530.0306745098,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1086,61.0,Female,HC,SRBPS,1350.61584572025,University of Tokyo,GE Discovery MR750w
+sub-1062,40.0,Female,HC,SRBPS,1356.34675358858,University of Tokyo,GE Discovery MR750w
+sub-0741,35.0,Female,HC,SRBPS,1391.36077161956,Kyoto university,SIEMENS  TimTrio
+sub-0811,54.0,Female,HC,SRBPS,1387.89829844782,Kyoto university,SIEMENS  TimTrio
+sub-0049,42.0,Female,HC,SRBPS,1370.18261568627,Showa university,SIEMENS  Verio
+sub-0646,20.0,Female,HC,SRBPS,1552.69862352941,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0938,22.0,Female,HC,SRBPS,1367.84756608011,Kyoto university ,SIEMENS Trio
+sub-0457,39.0,Female,HC,SRBPS,1531.2172062507,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0538,66.0,Female,HC,SRBPS,1400.11727058824,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1035,64.0,Female,HC,SRBPS,1390.23587026714,University of Tokyo,GE Discovery MR750w
+sub-1088,36.0,Female,HC,SRBPS,1352.79657417826,University of Tokyo,GE Discovery MR750w
+sub-0869,20.0,Female,HC,SRBPS,1227.17721381886,Kyoto university,SIEMENS  TimTrio
+sub-1335,20.0,Female,HC,SRBPS,1469.16657579247,ATR ,SIEMENS Verio
+sub-1340,22.0,Female,HC,SRBPS,1314.71573677235,ATR ,SIEMENS Verio
+sub-1117,42.0,Female,HC,SRBPS,1299.5294136937,University of Tokyo,GE Discovery MR750w
+sub-0785,22.0,Female,HC,SRBPS,1307.00641749886,Kyoto university,SIEMENS  TimTrio
+sub-0629,69.0,Female,HC,SRBPS,1360.56479215686,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1080,37.0,Female,HC,SRBPS,1388.01868453447,University of Tokyo,GE Discovery MR750w
+sub-0833,62.0,Female,HC,SRBPS,1318.01606546032,Kyoto university,SIEMENS  TimTrio
+sub-0316,30.0,Female,HC,SRBPS,1335.23391566715,Hiroshima University Hospital,GE Signa HDxt
+sub-0439,40.0,Female,HC,SRBPS,1538.94086856392,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0516,44.0,Female,HC,SRBPS,1554.57084705882,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0178,21.0,Female,HC,SRBPS,1386.32869411765,Showa university,SIEMENS  Verio
+sub-1102,30.0,Female,HC,SRBPS,1266.84266870921,University of Tokyo,GE Discovery MR750w
+sub-0624,60.0,Female,HC,SRBPS,1494.90258823529,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0364,58.0,Female,HC,SRBPS,1560.87899659941,Hiroshima University Hospital,GE Signa HDxt
+sub-0292,32.0,Female,HC,SRBPS,1371.81680399209,Hiroshima University Hospital,GE Signa HDxt
+sub-1093,25.0,Female,HC,SRBPS,1516.67748439093,University of Tokyo,GE Discovery MR750w
+sub-0260,24.0,Female,HC,SRBPS,1640.52658753766,Hiroshima University Hospital,GE Signa HDxt
+sub-0584,68.0,Female,HC,SRBPS,1366.82156862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1028,71.0,Female,HC,SRBPS,1378.28785883996,University of Tokyo,GE Discovery MR750w
+sub-0845,44.0,Female,HC,SRBPS,1252.47167664758,Kyoto university,SIEMENS  TimTrio
+sub-1115,61.0,Female,HC,SRBPS,1244.32308149872,University of Tokyo,GE Discovery MR750w
+sub-0435,34.0,Female,HC,SRBPS,1415.52531512458,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0850,23.0,Female,HC,SRBPS,1447.087256835,Kyoto university,SIEMENS  TimTrio
+sub-1099,32.0,Female,HC,SRBPS,1219.35841539847,University of Tokyo,GE Discovery MR750w
+sub-0971,19.0,Female,HC,SRBPS,1303.34614815027,Kyoto university ,SIEMENS Trio
+sub-0540,52.0,Female,HC,SRBPS,1331.20200392157,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0635,43.0,Female,HC,SRBPS,1363.60754117647,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0467,49.0,Female,HC,SRBPS,1333.27779703693,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0036,25.0,Female,HC,SRBPS,1429.34698039216,Showa university,SIEMENS  Verio
+sub-0866,53.0,Female,HC,SRBPS,1369.91815445185,Kyoto university,SIEMENS  TimTrio
+sub-0663,61.0,Female,HC,SRBPS,1374.90725098039,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0250,23.0,Female,HC,SRBPS,1534.06681295778,Hiroshima University Hospital,GE Signa HDxt
+sub-0290,22.0,Female,HC,SRBPS,1446.27341899078,Hiroshima University Hospital,GE Signa HDxt
+sub-0408,43.0,Female,HC,SRBPS,1373.95689710019,Hiroshima University Hospital,GE Signa HDxt
+sub-0975,21.0,Female,HC,SRBPS,1319.97272317569,Kyoto university ,SIEMENS Trio
+sub-0660,49.0,Female,HC,SRBPS,1250.92110980392,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1116,48.0,Female,HC,SRBPS,1438.12917701489,University of Tokyo,GE Discovery MR750w
+sub-0397,42.0,Female,HC,SRBPS,1266.77745581989,Hiroshima University Hospital,GE Signa HDxt
+sub-0437,55.0,Female,HC,SRBPS,1308.19644384772,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0658,58.0,Female,HC,SRBPS,1226.95154509804,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1357,40.0,Female,HC,SRBPS,1430.27550100927,CiNet,SIEMENS TimTrio
+sub-0308,49.0,Female,HC,SRBPS,1622.55787137636,Hiroshima University Hospital,GE Signa HDxt
+sub-0002,23.0,Female,HC,SRBPS,1425.22263529412,Showa university,SIEMENS  Verio
+sub-1338,22.0,Female,HC,SRBPS,1299.61247381302,ATR ,SIEMENS Verio
+sub-0402,31.0,Female,HC,SRBPS,1360.4589319814,Hiroshima University Hospital,GE Signa HDxt
+sub-0641,57.0,Female,HC,SRBPS,1375.4774627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0360,38.0,Female,HC,SRBPS,1575.12613613175,Hiroshima University Hospital,GE Signa HDxt
+sub-0623,50.0,Female,HC,SRBPS,1324.44000392157,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0264,25.0,Female,HC,SRBPS,1458.22000232883,Hiroshima University Hospital,GE Signa HDxt
+sub-0867,42.0,Female,HC,SRBPS,1376.99211171985,Kyoto university,SIEMENS  TimTrio
+sub-0972,20.0,Female,HC,SRBPS,1285.36453407183,Kyoto university ,SIEMENS Trio
+sub-0724,44.0,Female,HC,SRBPS,1253.24569391067,Kyoto university,SIEMENS  TimTrio
+sub-0429,45.0,Female,HC,SRBPS,1552.27048311425,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1049,69.0,Female,HC,SRBPS,1226.25684431088,University of Tokyo,GE Discovery MR750w
+sub-1098,29.0,Female,HC,SRBPS,1351.52614663966,University of Tokyo,GE Discovery MR750w
+sub-1385,20.0,Female,HC,SRBPS,1376.71941655357,CiNet,SIEMENS TimTrio
+sub-1076,71.0,Female,HC,SRBPS,1406.3187462853,University of Tokyo,GE Discovery MR750w
+sub-1341,22.0,Female,HC,SRBPS,1386.54711012649,ATR ,SIEMENS Verio
+sub-0032,33.0,Female,HC,SRBPS,1390.55451372549,Showa university,SIEMENS  Verio
+sub-0625,49.0,Female,HC,SRBPS,1542.35957254902,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1112,60.0,Female,HC,SRBPS,1635.94505823629,University of Tokyo,GE Discovery MR750w
+sub-1083,72.0,Female,HC,SRBPS,1294.89561205338,University of Tokyo,GE Discovery MR750w
+sub-1352,47.0,Female,HC,SRBPS,1419.06603989938,CiNet,SIEMENS TimTrio
+sub-0410,49.0,Female,HC,SRBPS,1340.51037054,Hiroshima University Hospital,GE Signa HDxt
+sub-0532,45.0,Female,HC,SRBPS,1283.43990588235,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0816,55.0,Female,HC,SRBPS,1308.9892107191,Kyoto university,SIEMENS  TimTrio
+sub-0665,44.0,Female,HC,SRBPS,1392.90308235294,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1037,47.0,Female,HC,SRBPS,1229.10934088986,University of Tokyo,GE Discovery MR750w
+sub-0461,28.0,Female,HC,SRBPS,1367.53163132159,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0378,32.0,Female,HC,SRBPS,1492.98967844034,Hiroshima University Hospital,GE Signa HDxt
+sub-0503,66.0,Female,HC,SRBPS,1392.04295294118,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0554,52.0,Female,HC,SRBPS,1410.93515686275,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0411,31.0,Female,HC,SRBPS,1338.98878742804,Hiroshima University Hospital,GE Signa HDxt
+sub-1380,22.0,Female,HC,SRBPS,1511.10572949412,CiNet,SIEMENS TimTrio
+sub-0807,23.0,Female,HC,SRBPS,1374.39608617805,Kyoto university,SIEMENS  TimTrio
+sub-0334,56.0,Female,HC,SRBPS,1405.7285979418,Hiroshima University Hospital,GE Signa HDxt
+sub-1089,26.0,Female,HC,SRBPS,1606.7097070871,University of Tokyo,GE Discovery MR750w
+sub-0425,42.0,Female,HC,SRBPS,1331.42949505166,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1053,43.0,Female,HC,SRBPS,1326.93801317488,University of Tokyo,GE Discovery MR750w
+sub-1301,22.0,Female,HC,SRBPS,1362.64093633216,ATR ,SIEMENS Verio
+sub-0783,21.0,Female,HC,SRBPS,1383.29306564347,Kyoto university,SIEMENS  TimTrio
+sub-1025,31.0,Female,HC,SRBPS,1353.39780613688,University of Tokyo,GE Discovery MR750w
+sub-0651,48.0,Female,HC,SRBPS,1371.8672745098,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0062,23.0,Female,HC,SRBPS,1472.11076078431,Showa university,SIEMENS  Verio
+sub-0967,20.0,Female,HC,SRBPS,1419.96609902206,Kyoto university ,SIEMENS Trio
+sub-0518,45.0,Female,HC,SRBPS,1527.40883137255,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1055,72.0,Female,HC,SRBPS,1420.77452408757,University of Tokyo,GE Discovery MR750w
+sub-0769,54.0,Female,HC,SRBPS,1260.75569562592,Kyoto university,SIEMENS  TimTrio
+sub-0777,46.0,Female,HC,SRBPS,1251.99329090911,Kyoto university,SIEMENS  TimTrio
+sub-0597,52.0,Female,HC,SRBPS,1364.66471764706,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1297,20.0,Female,HC,SRBPS,1417.29852607511,ATR ,SIEMENS Verio
+sub-0786,27.0,Female,HC,SRBPS,1362.06715429387,Kyoto university,SIEMENS  TimTrio
+sub-0627,67.0,Female,HC,SRBPS,1453.60492156863,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1337,20.0,Female,HC,SRBPS,1393.88781275069,ATR ,SIEMENS Verio
+sub-0762,44.0,Female,HC,SRBPS,1325.76297095709,Kyoto university,SIEMENS  TimTrio
+sub-0851,23.0,Female,HC,SRBPS,1306.13191488317,Kyoto university,SIEMENS  TimTrio
+sub-0355,39.0,Female,HC,SRBPS,1528.70911799182,Hiroshima University Hospital,GE Signa HDxt
+sub-0314,45.0,Female,HC,SRBPS,1225.30467968483,Hiroshima University Hospital,GE Signa HDxt
+sub-0306,60.0,Female,HC,SRBPS,1468.00203125253,Hiroshima University Hospital,GE Signa HDxt
+sub-0266,22.0,Female,HC,SRBPS,1551.35507780567,Hiroshima University Hospital,GE Signa HDxt
+sub-0820,22.0,Female,HC,SRBPS,1390.49414621768,Kyoto university,SIEMENS  TimTrio
+sub-0746,37.0,Female,HC,SRBPS,1434.01933454091,Kyoto university,SIEMENS  TimTrio
+sub-0852,24.0,Female,HC,SRBPS,1369.25737806467,Kyoto university,SIEMENS  TimTrio
+sub-0170,20.0,Female,HC,SRBPS,1319.19101854184,Showa university,SIEMENS  Verio
+sub-0390,26.0,Female,HC,SRBPS,1348.78144480931,Hiroshima University Hospital,GE Signa HDxt
+sub-0286,36.0,Female,HC,SRBPS,1309.83627592041,Hiroshima University Hospital,GE Signa HDxt
+sub-0727,34.0,Female,HC,SRBPS,1306.33383406879,Kyoto university,SIEMENS  TimTrio
+sub-0546,47.0,Female,HC,SRBPS,1241.40715686275,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0739,36.0,Female,HC,SRBPS,1326.18483848573,Kyoto university,SIEMENS  TimTrio
+sub-0645,42.0,Female,HC,SRBPS,1530.38247843137,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0603,55.0,Female,HC,SRBPS,1566.08618039216,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0994,32.0,Female,HC,SRBPS,1311.78713786599,Kyoto university ,SIEMENS Trio
+sub-0963,19.0,Female,HC,SRBPS,1355.93885445165,Kyoto university ,SIEMENS Trio
+sub-0510,45.0,Female,HC,SRBPS,1436.60992156863,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0395,27.0,Female,HC,SRBPS,1449.15173367277,Hiroshima University Hospital,GE Signa HDxt
+sub-0574,71.0,Female,HC,SRBPS,1255.32436470588,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0451,62.0,Female,HC,SRBPS,1321.02251736549,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1038,27.0,Female,HC,SRBPS,1570.85360613203,University of Tokyo,GE Discovery MR750w
+sub-1060,31.0,Female,HC,SRBPS,1582.87116838982,University of Tokyo,GE Discovery MR750w
+sub-1109,72.0,Female,HC,SRBPS,1373.53869086969,University of Tokyo,GE Discovery MR750w
+sub-0817,22.0,Female,HC,SRBPS,1317.84620493481,Kyoto university,SIEMENS  TimTrio
+sub-0417,51.0,Female,HC,SRBPS,1388.5218767532,Hiroshima University Hospital,GE Signa HDxt
+sub-1029,33.0,Female,HC,SRBPS,1385.86985558507,University of Tokyo,GE Discovery MR750w
+sub-0859,38.0,Female,HC,SRBPS,1221.21145831081,Kyoto university,SIEMENS  TimTrio
+sub-0506,40.0,Female,HC,SRBPS,1460.26180784314,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0834,42.0,Female,HC,SRBPS,1391.98681114265,Kyoto university,SIEMENS  TimTrio
+sub-1032,32.0,Female,HC,SRBPS,1513.26582417971,University of Tokyo,GE Discovery MR750w
+sub-1069,46.0,Female,HC,SRBPS,1240.39930117891,University of Tokyo,GE Discovery MR750w
+sub-0634,66.0,Female,HC,SRBPS,1323.54826666667,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0721,45.0,Female,HC,SRBPS,1332.00296738891,Kyoto university,SIEMENS  TimTrio
+sub-1073,24.0,Female,HC,SRBPS,1427.57376455533,University of Tokyo,GE Discovery MR750w
+sub-0542,58.0,Female,HC,SRBPS,1617.75177647059,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0836,34.0,Female,HC,SRBPS,1281.11216337607,Kyoto university,SIEMENS  TimTrio
+sub-0564,50.0,Female,HC,SRBPS,1579.4503372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0607,55.0,Female,HC,SRBPS,1436.3133372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0770,30.0,Female,HC,SRBPS,1412.03660561324,Kyoto university,SIEMENS  TimTrio
+sub-0433,54.0,Female,HC,SRBPS,1399.93913438475,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1084,69.0,Female,HC,SRBPS,1359.67667009554,University of Tokyo,GE Discovery MR750w
+sub-1054,34.0,Female,HC,SRBPS,1268.09985494235,University of Tokyo,GE Discovery MR750w
+sub-0740,34.0,Female,HC,SRBPS,1219.96581237809,Kyoto university,SIEMENS  TimTrio
+sub-0380,42.0,Female,HC,SRBPS,1406.02935051248,Hiroshima University Hospital,GE Signa HDxt
+sub-0780,52.0,Female,HC,SRBPS,1370.53732721489,Kyoto university,SIEMENS  TimTrio
+sub-1343,25.0,Female,HC,SRBPS,1340.94225929387,ATR ,SIEMENS TimTrio
+sub-0668,35.0,Female,HC,SRBPS,1345.69211372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0659,64.0,Female,HC,SRBPS,1381.71723921569,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0814,41.0,Female,HC,SRBPS,1427.91054173456,Kyoto university,SIEMENS  TimTrio
+sub-1065,38.0,Female,HC,SRBPS,1502.42887865594,University of Tokyo,GE Discovery MR750w
+sub-0647,70.0,Female,HC,SRBPS,1356.45779215686,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0717,32.0,Female,HC,SRBPS,1238.74934387409,Kyoto university,SIEMENS  TimTrio
+sub-0336,41.0,Female,HC,SRBPS,1326.26697804444,Hiroshima University Hospital,GE Signa HDxt
+sub-0995,25.0,Female,HC,SRBPS,1300.23138462129,Kyoto university ,SIEMENS Trio
+sub-1091,38.0,Female,HC,SRBPS,1421.03484582303,University of Tokyo,GE Discovery MR750w
+sub-0562,68.0,Female,HC,SRBPS,1470.21870588235,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0455,50.0,Female,HC,SRBPS,1525.64163054884,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0356,42.0,Female,HC,SRBPS,1409.76111760391,Hiroshima University Hospital,GE Signa HDxt
+sub-0443,43.0,Female,HC,SRBPS,1366.64697975678,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0742,21.0,Female,HC,SRBPS,1309.68724297357,Kyoto university,SIEMENS  TimTrio
+sub-1101,61.0,Female,HC,SRBPS,1143.56579939758,University of Tokyo,GE Discovery MR750w
+sub-1066,72.0,Female,HC,SRBPS,1421.76053537448,University of Tokyo,GE Discovery MR750w
+sub-1381,39.0,Female,HC,SRBPS,1439.86231306926,CiNet,SIEMENS TimTrio
+sub-1048,34.0,Female,HC,SRBPS,1313.88959975489,University of Tokyo,GE Discovery MR750w
+sub-1360,46.0,Female,HC,SRBPS,1404.52557124507,CiNet,SIEMENS TimTrio
+sub-0382,43.0,Female,HC,SRBPS,1428.88516407797,Hiroshima University Hospital,GE Signa HDxt
+sub-0804,21.0,Female,HC,SRBPS,1313.65077592507,Kyoto university,SIEMENS  TimTrio
+sub-0716,27.0,Female,HC,SRBPS,1388.25656365679,Kyoto university,SIEMENS  TimTrio
+sub-0968,24.0,Female,HC,SRBPS,1192.27017260026,Kyoto university ,SIEMENS Trio
+sub-0654,56.0,Female,HC,SRBPS,1158.8720745098,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1064,32.0,Female,HC,SRBPS,1495.0936274251,University of Tokyo,GE Discovery MR750w
+sub-0657,48.0,Female,HC,SRBPS,1598.83465490196,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0204,29.0,Female,HC,SRBPS,1462.51847843137,Showa university,SIEMENS  Verio
+sub-0982,38.0,Female,HC,SRBPS,1470.67915737542,Kyoto university ,SIEMENS Trio
+sub-0860,18.0,Female,HC,SRBPS,1506.58760860703,Kyoto university,SIEMENS  TimTrio
+sub-1364,44.0,Female,HC,SRBPS,1529.2318741827,CiNet,SIEMENS TimTrio
+sub-0849,21.0,Female,HC,SRBPS,1424.52504945853,Kyoto university,SIEMENS  TimTrio
+sub-0636,65.0,Female,HC,SRBPS,1348.55776862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0771,21.0,Female,HC,SRBPS,1427.25084945857,Kyoto university,SIEMENS  TimTrio
+sub-1100,40.0,Female,HC,SRBPS,1382.05352011043,University of Tokyo,GE Discovery MR750w
+sub-0320,36.0,Female,HC,SRBPS,1355.51321327058,Hiroshima University Hospital,GE Signa HDxt
+sub-1036,78.0,Female,HC,SRBPS,1312.8610735873,University of Tokyo,GE Discovery MR750w
+sub-1043,46.0,Female,HC,SRBPS,1403.72828970501,University of Tokyo,GE Discovery MR750w
+sub-0388,48.0,Female,HC,SRBPS,1350.17586711647,Hiroshima University Hospital,GE Signa HDxt
+sub-0774,43.0,Female,HC,SRBPS,1304.18529610473,Kyoto university,SIEMENS  TimTrio
+sub-0105,23.0,Female,HC,SRBPS,1586.37503137255,Showa university,SIEMENS  Verio
+sub-0407,44.0,Female,HC,SRBPS,1236.21989126662,Hiroshima University Hospital,GE Signa HDxt
+sub-0372,36.0,Female,HC,SRBPS,1607.2321997005,Hiroshima University Hospital,GE Signa HDxt
+sub-0935,20.0,Female,HC,SRBPS,1286.96459308463,Kyoto university ,SIEMENS Trio
+sub-0536,20.0,Female,HC,SRBPS,1399.00769803922,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0621,37.0,Female,HC,SRBPS,1336.38648235294,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0423,26.0,Female,HC,SRBPS,1281.4598630107,Hiroshima University Hospital,GE Signa HDxt
+sub-1108,36.0,Female,HC,SRBPS,1500.92499544704,University of Tokyo,GE Discovery MR750w
+sub-0957,28.0,Female,HC,SRBPS,1585.07062627181,Kyoto university ,SIEMENS Trio
+sub-0376,48.0,Female,HC,SRBPS,1289.35388237219,Hiroshima University Hospital,GE Signa HDxt
+sub-0961,19.0,Female,HC,SRBPS,1447.08906571655,Kyoto university ,SIEMENS Trio
+sub-1090,44.0,Female,HC,SRBPS,1641.1258500506,University of Tokyo,GE Discovery MR750w
+sub-0338,45.0,Female,HC,SRBPS,1531.24425592932,Hiroshima University Hospital,GE Signa HDxt
+sub-0419,54.0,Female,HC,SRBPS,1351.93397656187,Hiroshima University Hospital,GE Signa HDxt
+sub-0504,45.0,Female,HC,SRBPS,1362.84936862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0580,64.0,Female,HC,SRBPS,1332.64598823529,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0244,37.0,Female,HC,SRBPS,1416.83753225472,Hiroshima University Hospital,GE Signa HDxt
+sub-0738,47.0,Female,HC,SRBPS,1382.30068556777,Kyoto university,SIEMENS  TimTrio
+sub-1107,28.0,Female,HC,SRBPS,1444.20089317552,University of Tokyo,GE Discovery MR750w
+sub-0530,69.0,Female,HC,SRBPS,1379.92128235294,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0280,23.0,Female,HC,SRBPS,1485.87919230745,Hiroshima University Hospital,GE Signa HDxt
+sub-0614,72.0,Female,HC,SRBPS,1246.54806666667,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0745,35.0,Female,HC,SRBPS,1311.38859545041,Kyoto university,SIEMENS  TimTrio
+sub-0235,55.0,Female,HC,SRBPS,1309.89559215686,Showa university,SIEMENS  Verio
+sub-0421,40.0,Female,HC,SRBPS,1446.72053458058,Hiroshima University Hospital,GE Signa HDxt
+sub-0973,20.0,Female,HC,SRBPS,1499.98885009202,Kyoto university ,SIEMENS Trio
+sub-0969,24.0,Female,HC,SRBPS,1331.47361117416,Kyoto university ,SIEMENS Trio
+sub-0819,59.0,Female,HC,SRBPS,1317.70362804654,Kyoto university,SIEMENS  TimTrio
+sub-0862,54.0,Female,HC,SRBPS,1358.5882341473,Kyoto university,SIEMENS  TimTrio
+sub-0965,20.0,Female,HC,SRBPS,1518.27040692206,Kyoto university ,SIEMENS Trio
+sub-0020,50.0,Male,HC,SRBPS,1555.06004313725,Showa university,SIEMENS  Verio
+sub-0405,24.0,Male,HC,SRBPS,1347.79215510592,Hiroshima University Hospital,GE Signa HDxt
+sub-1082,30.0,Male,HC,SRBPS,1539.76397227211,University of Tokyo,GE Discovery MR750w
+sub-0937,24.0,Male,HC,SRBPS,1550.64118825424,Kyoto university ,SIEMENS Trio
+sub-0613,56.0,Male,HC,SRBPS,1540.19505098039,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0948,38.0,Male,HC,SRBPS,1373.68890691848,Kyoto university ,SIEMENS Trio
+sub-0404,55.0,Male,HC,SRBPS,1613.79882699028,Hiroshima University Hospital,GE Signa HDxt
+sub-0023,30.0,Male,HC,SRBPS,1667.53737254902,Showa university,SIEMENS  Verio
+sub-0017,25.0,Male,HC,SRBPS,1698.17715686275,Showa university,SIEMENS  Verio
+sub-0582,65.0,Male,HC,SRBPS,1697.19905098039,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0166,27.0,Male,HC,SRBPS,1529.05723137255,Showa university,SIEMENS  Verio
+sub-0662,43.0,Male,HC,SRBPS,1545.76427058824,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0037,32.0,Male,HC,SRBPS,1526.08652156863,Showa university,SIEMENS  Verio
+sub-0207,30.0,Male,HC,SRBPS,1549.91858431373,Showa university,SIEMENS  Verio
+sub-0941,30.0,Male,HC,SRBPS,1491.80215039393,Kyoto university ,SIEMENS Trio
+sub-1313,22.0,Male,HC,SRBPS,1580.33185894282,ATR ,SIEMENS Verio
+sub-1299,21.0,Male,HC,SRBPS,1434.16399923,ATR ,SIEMENS TimTrio
+sub-0806,25.0,Male,HC,SRBPS,1440.3777358767,Kyoto university,SIEMENS  TimTrio
+sub-0821,45.0,Male,HC,SRBPS,1317.47806196469,Kyoto university,SIEMENS  TimTrio
+sub-0758,52.0,Male,HC,SRBPS,1646.24474786149,Kyoto university,SIEMENS  TimTrio
+sub-1355,61.0,Male,HC,SRBPS,1532.1876083701,CiNet,SIEMENS TimTrio
+sub-0858,47.0,Male,HC,SRBPS,1620.98821589319,Kyoto university,SIEMENS  TimTrio
+sub-0955,19.0,Male,HC,SRBPS,1548.33771600627,Kyoto university ,SIEMENS Trio
+sub-0868,42.0,Male,HC,SRBPS,1418.33815932306,Kyoto university,SIEMENS  TimTrio
+sub-0106,32.0,Male,HC,SRBPS,1647.19838823529,Showa university,SIEMENS  Verio
+sub-0947,33.0,Male,HC,SRBPS,1557.76521832251,Kyoto university ,SIEMENS Trio
+sub-0109,31.0,Male,HC,SRBPS,1575.50347058824,Showa university,SIEMENS  Verio
+sub-0757,60.0,Male,HC,SRBPS,1515.77914625307,Kyoto university,SIEMENS  TimTrio
+sub-0609,73.0,Male,HC,SRBPS,1592.57641568627,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0832,20.0,Male,HC,SRBPS,1527.82214943453,Kyoto university,SIEMENS  TimTrio
+sub-0015,35.0,Male,HC,SRBPS,1586.71674901961,Showa university,SIEMENS  Verio
+sub-0951,19.0,Male,HC,SRBPS,1551.5767993006,Kyoto university ,SIEMENS Trio
+sub-0940,33.0,Male,HC,SRBPS,1711.59267921107,Kyoto university ,SIEMENS Trio
+sub-0942,32.0,Male,HC,SRBPS,1813.20114024357,Kyoto university ,SIEMENS Trio
+sub-0203,35.0,Male,HC,SRBPS,1603.92795686275,Showa university,SIEMENS  Verio
+sub-0039,26.0,Male,HC,SRBPS,1713.78265490196,Showa university,SIEMENS  Verio
+sub-0796,21.0,Male,HC,SRBPS,1707.14785144503,Kyoto university,SIEMENS  TimTrio
+sub-0465,55.0,Male,HC,SRBPS,1573.56949624182,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0999,57.0,Male,HC,SRBPS,1640.81167917946,Kyoto university ,SIEMENS Trio
+sub-0755,49.0,Male,HC,SRBPS,1521.75637715076,Kyoto university,SIEMENS  TimTrio
+sub-0007,26.0,Male,HC,SRBPS,1692.82594117647,Showa university,SIEMENS  Verio
+sub-0175,27.0,Male,HC,SRBPS,1612.03639215686,Showa university,SIEMENS  Verio
+sub-1047,33.0,Male,HC,SRBPS,1630.4444850121,University of Tokyo,GE Discovery MR750w
+sub-0165,20.0,Male,HC,SRBPS,1690.80579215686,Showa university,SIEMENS  Verio
+sub-1345,23.0,Male,HC,SRBPS,1441.6417372549,ATR ,SIEMENS TimTrio
+sub-0765,41.0,Male,HC,SRBPS,1432.17181205657,Kyoto university,SIEMENS  TimTrio
+sub-1371,24.0,Male,HC,SRBPS,1540.08521193228,CiNet,SIEMENS TimTrio
+sub-0838,20.0,Male,HC,SRBPS,1589.77558213011,Kyoto university,SIEMENS  TimTrio
+sub-0493,36.0,Male,HC,SRBPS,1683.60335294118,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1333,23.0,Male,HC,SRBPS,1565.10711824505,ATR ,SIEMENS Verio
+sub-0522,36.0,Male,HC,SRBPS,1632.55032941176,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1306,22.0,Male,HC,SRBPS,1440.64197976657,ATR ,SIEMENS Verio
+sub-1111,42.0,Male,HC,SRBPS,1574.94181065359,University of Tokyo,GE Discovery MR750w
+sub-1000,39.0,Male,HC,SRBPS,1568.63916925913,Kyoto university ,SIEMENS Trio
+sub-1026,51.0,Male,HC,SRBPS,1479.75769111797,University of Tokyo,GE Discovery MR750w
+sub-0310,38.0,Male,HC,SRBPS,1446.35018626368,Hiroshima University Hospital,GE Signa HDxt
+sub-0775,43.0,Male,HC,SRBPS,1641.83795341236,Kyoto university,SIEMENS  TimTrio
+sub-0183,20.0,Male,HC,SRBPS,1583.14534901961,Showa university,SIEMENS  Verio
+sub-0268,24.0,Male,HC,SRBPS,1802.28125438298,Hiroshima University Hospital,GE Signa HDxt
+sub-0998,45.0,Male,HC,SRBPS,1615.30897052588,Kyoto university ,SIEMENS Trio
+sub-1311,24.0,Male,HC,SRBPS,1603.25764199691,ATR ,SIEMENS Verio
+sub-1007,32.0,Male,HC,SRBPS,1856.54060885961,Kyoto university ,SIEMENS Trio
+sub-0839,44.0,Male,HC,SRBPS,1620.49984845733,Kyoto university,SIEMENS  TimTrio
+sub-0949,19.0,Male,HC,SRBPS,1512.60124215439,Kyoto university ,SIEMENS Trio
+sub-1001,33.0,Male,HC,SRBPS,1500.55301053444,Kyoto university ,SIEMENS Trio
+sub-0812,21.0,Male,HC,SRBPS,1482.70310737414,Kyoto university,SIEMENS  TimTrio
+sub-0744,27.0,Male,HC,SRBPS,1500.73967026654,Kyoto university,SIEMENS  TimTrio
+sub-1068,55.0,Male,HC,SRBPS,1576.18519253455,University of Tokyo,GE Discovery MR750w
+sub-1087,59.0,Male,HC,SRBPS,1397.81582839485,University of Tokyo,GE Discovery MR750w
+sub-0794,24.0,Male,HC,SRBPS,1470.15643354005,Kyoto university,SIEMENS  TimTrio
+sub-0029,32.0,Male,HC,SRBPS,1544.33813333333,Showa university,SIEMENS  Verio
+sub-0945,31.0,Male,HC,SRBPS,1651.87963162789,Kyoto university ,SIEMENS Trio
+sub-1039,32.0,Male,HC,SRBPS,1549.3362420707,University of Tokyo,GE Discovery MR750w
+sub-0344,28.0,Male,HC,SRBPS,1547.59763213067,Hiroshima University Hospital,GE Signa HDxt
+sub-0420,68.0,Male,HC,SRBPS,1641.39951465854,Hiroshima University Hospital,GE Signa HDxt
+sub-1072,78.0,Male,HC,SRBPS,1478.24528940061,University of Tokyo,GE Discovery MR750w
+sub-1336,20.0,Male,HC,SRBPS,1559.18923921569,ATR ,SIEMENS Verio
+sub-0768,25.0,Male,HC,SRBPS,1527.40443931682,Kyoto university,SIEMENS  TimTrio
+sub-1024,69.0,Male,HC,SRBPS,1427.46207744441,University of Tokyo,GE Discovery MR750w
+sub-0730,31.0,Male,HC,SRBPS,1467.1209119726,Kyoto university,SIEMENS  TimTrio
+sub-0782,21.0,Male,HC,SRBPS,1531.74063276928,Kyoto university,SIEMENS  TimTrio
+sub-1382,40.0,Male,HC,SRBPS,1463.95114814502,CiNet,SIEMENS TimTrio
+sub-0960,36.0,Male,HC,SRBPS,1533.20107976632,Kyoto university ,SIEMENS Trio
+sub-0101,24.0,Male,HC,SRBPS,1532.91668627451,Showa university,SIEMENS  Verio
+sub-0188,23.0,Male,HC,SRBPS,1699.47356470588,Showa university,SIEMENS  Verio
+sub-0274,21.0,Male,HC,SRBPS,1661.99221071838,Hiroshima University Hospital,GE Signa HDxt
+sub-0031,31.0,Male,HC,SRBPS,1577.61382745098,Showa university,SIEMENS  Verio
+sub-0358,59.0,Male,HC,SRBPS,1656.81789749637,Hiroshima University Hospital,GE Signa HDxt
+sub-0211,33.0,Male,HC,SRBPS,1841.20455686274,Showa university,SIEMENS  Verio
+sub-1002,55.0,Male,HC,SRBPS,1431.67579586906,Kyoto university ,SIEMENS Trio
+sub-0725,39.0,Male,HC,SRBPS,1431.60506179567,Kyoto university,SIEMENS  TimTrio
+sub-0726,33.0,Male,HC,SRBPS,1742.80845497732,Kyoto university,SIEMENS  TimTrio
+sub-0184,35.0,Male,HC,SRBPS,1515.90903529412,Showa university,SIEMENS  Verio
+sub-0214,20.0,Male,HC,SRBPS,1591.35569019608,Showa university,SIEMENS  Verio
+sub-0799,21.0,Male,HC,SRBPS,1593.42512606508,Kyoto university,SIEMENS  TimTrio
+sub-1304,21.0,Male,HC,SRBPS,1413.68635574149,ATR ,SIEMENS Verio
+sub-0256,24.0,Male,HC,SRBPS,1728.08004497537,Hiroshima University Hospital,GE Signa HDxt
+sub-0300,21.0,Male,HC,SRBPS,1685.05242422519,Hiroshima University Hospital,GE Signa HDxt
+sub-0626,65.0,Male,HC,SRBPS,1601.87151372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0829,33.0,Male,HC,SRBPS,1456.75820373543,Kyoto university,SIEMENS  TimTrio
+sub-0479,43.0,Male,HC,SRBPS,1442.35939622998,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1344,24.0,Male,HC,SRBPS,1667.01481053586,ATR ,SIEMENS TimTrio
+sub-0578,68.0,Male,HC,SRBPS,1424.22438431373,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0181,23.0,Male,HC,SRBPS,1625.02618431373,Showa university,SIEMENS  Verio
+sub-0719,36.0,Male,HC,SRBPS,1995.32175455547,Kyoto university,SIEMENS  TimTrio
+sub-0953,20.0,Male,HC,SRBPS,1625.38997843641,Kyoto university ,SIEMENS Trio
+sub-1009,28.0,Male,HC,SRBPS,1743.05716958824,Kyoto university ,SIEMENS Trio
+sub-0737,30.0,Male,HC,SRBPS,1590.9003510522,Kyoto university,SIEMENS  TimTrio
+sub-0001,23.0,Male,HC,SRBPS,1702.49983921569,Showa university,SIEMENS  Verio
+sub-0802,21.0,Male,HC,SRBPS,1501.21495100714,Kyoto university,SIEMENS  TimTrio
+sub-0520,46.0,Male,HC,SRBPS,1514.30418823529,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1325,21.0,Male,HC,SRBPS,1687.6462473923,ATR ,SIEMENS Verio
+sub-1349,22.0,Male,HC,SRBPS,1762.85867197732,CiNet,SIEMENS TimTrio
+sub-1302,22.0,Male,HC,SRBPS,1568.36440392157,ATR ,SIEMENS Verio
+sub-0572,69.0,Male,HC,SRBPS,1382.12012941176,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0471,48.0,Male,HC,SRBPS,1715.59088423415,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0653,49.0,Male,HC,SRBPS,1607.57117254902,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0590,70.0,Male,HC,SRBPS,1612.44751372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0981,30.0,Male,HC,SRBPS,1771.35151591047,Kyoto university ,SIEMENS Trio
+sub-1353,33.0,Male,HC,SRBPS,1573.83982400469,CiNet,SIEMENS TimTrio
+sub-0011,26.0,Male,HC,SRBPS,1469.74696470588,Showa university,SIEMENS  Verio
+sub-0857,21.0,Male,HC,SRBPS,1652.68669752779,Kyoto university,SIEMENS  TimTrio
+sub-0568,66.0,Male,HC,SRBPS,1630.00403921569,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0616,53.0,Male,HC,SRBPS,1573.45890588235,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0463,39.0,Male,HC,SRBPS,1437.7476577285,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0610,64.0,Male,HC,SRBPS,1350.83401960784,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0528,38.0,Male,HC,SRBPS,1544.19258039216,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1318,21.0,Male,HC,SRBPS,1568.15122704489,ATR ,SIEMENS TimTrio
+sub-0743,47.0,Male,HC,SRBPS,1403.68758553444,Kyoto university,SIEMENS  TimTrio
+sub-0952,32.0,Male,HC,SRBPS,1652.22005778921,Kyoto university ,SIEMENS Trio
+sub-0734,30.0,Male,HC,SRBPS,1488.86246177804,Kyoto university,SIEMENS  TimTrio
+sub-1300,22.0,Male,HC,SRBPS,1578.24715686275,ATR ,SIEMENS TimTrio
+sub-0871,23.0,Male,HC,SRBPS,1461.88304211544,Kyoto university,SIEMENS  TimTrio
+sub-0632,75.0,Male,HC,SRBPS,1339.44975686274,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0596,52.0,Male,HC,SRBPS,1751.4828627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0800,20.0,Male,HC,SRBPS,1535.20919106094,Kyoto university,SIEMENS  TimTrio
+sub-0620,33.0,Male,HC,SRBPS,1468.64136470588,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0767,32.0,Male,HC,SRBPS,1403.14558172791,Kyoto university,SIEMENS  TimTrio
+sub-1384,37.0,Male,HC,SRBPS,1568.35531663959,CiNet,SIEMENS TimTrio
+sub-0111,24.0,Male,HC,SRBPS,1522.59379215686,Showa university,SIEMENS  Verio
+sub-1309,26.0,Male,HC,SRBPS,1418.69912294498,ATR ,SIEMENS Verio
+sub-0723,40.0,Male,HC,SRBPS,1365.52213902085,Kyoto university,SIEMENS  TimTrio
+sub-0018,27.0,Male,HC,SRBPS,1413.9035372549,Showa university,SIEMENS  Verio
+sub-0064,25.0,Male,HC,SRBPS,1547.10603529412,Showa university,SIEMENS  Verio
+sub-0497,36.0,Male,HC,SRBPS,1618.9899254902,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0526,35.0,Male,HC,SRBPS,1680.32789411765,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0790,21.0,Male,HC,SRBPS,1431.75371449489,Kyoto university,SIEMENS  TimTrio
+sub-1310,25.0,Male,HC,SRBPS,1478.00825666962,ATR ,SIEMENS Verio
+sub-1369,46.0,Male,HC,SRBPS,1639.21855964999,CiNet,SIEMENS TimTrio
+sub-0974,21.0,Male,HC,SRBPS,1475.38256284659,Kyoto university ,SIEMENS Trio
+sub-0748,44.0,Male,HC,SRBPS,1575.06758555309,Kyoto university,SIEMENS  TimTrio
+sub-0330,58.0,Male,HC,SRBPS,1498.80272666803,Hiroshima University Hospital,GE Signa HDxt
+sub-1370,25.0,Male,HC,SRBPS,1558.27848011503,CiNet,SIEMENS TimTrio
+sub-0611,40.0,Male,HC,SRBPS,1608.86957254902,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0797,34.0,Male,HC,SRBPS,1498.50559259526,Kyoto university,SIEMENS  TimTrio
+sub-0027,26.0,Male,HC,SRBPS,1680.19586666667,Showa university,SIEMENS  Verio
+sub-0054,28.0,Male,HC,SRBPS,1442.96280392157,Showa university,SIEMENS  Verio
+sub-0210,30.0,Male,HC,SRBPS,1687.94724705882,Showa university,SIEMENS  Verio
+sub-1320,21.0,Male,HC,SRBPS,1757.58366024497,ATR ,SIEMENS TimTrio
+sub-0813,53.0,Male,HC,SRBPS,1570.81103467762,Kyoto university,SIEMENS  TimTrio
+sub-0795,36.0,Male,HC,SRBPS,1666.17026211733,Kyoto university,SIEMENS  TimTrio
+sub-1339,22.0,Male,HC,SRBPS,1505.15833302826,ATR ,SIEMENS Verio
+sub-0202,38.0,Male,HC,SRBPS,1724.89407843137,Showa university,SIEMENS  Verio
+sub-0270,20.0,Male,HC,SRBPS,1692.53446240764,Hiroshima University Hospital,GE Signa HDxt
+sub-0749,44.0,Male,HC,SRBPS,1756.17905144578,Kyoto university,SIEMENS  TimTrio
+sub-1367,30.0,Male,HC,SRBPS,1676.05490490128,CiNet,SIEMENS TimTrio
+sub-0108,26.0,Male,HC,SRBPS,1579.35188627451,Showa university,SIEMENS  Verio
+sub-0427,50.0,Male,HC,SRBPS,1302.88012683527,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0206,27.0,Male,HC,SRBPS,1586.31165882353,Showa university,SIEMENS  Verio
+sub-0182,21.0,Male,HC,SRBPS,1696.53339873523,Showa university,SIEMENS  Verio
+sub-0033,30.0,Male,HC,SRBPS,1564.23347058824,Showa university,SIEMENS  Verio
+sub-0792,23.0,Male,HC,SRBPS,1594.26040670956,Kyoto university,SIEMENS  TimTrio
+sub-1077,55.0,Male,HC,SRBPS,1430.23348073517,University of Tokyo,GE Discovery MR750w
+sub-0939,25.0,Male,HC,SRBPS,1533.84397787533,Kyoto university ,SIEMENS Trio
+sub-1006,28.0,Male,HC,SRBPS,1591.64650266519,Kyoto university ,SIEMENS Trio
+sub-0592,38.0,Male,HC,SRBPS,1407.53464705882,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0619,26.0,Male,HC,SRBPS,1647.24191372549,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0254,24.0,Male,HC,SRBPS,1409.89990595515,Hiroshima University Hospital,GE Signa HDxt
+sub-1354,39.0,Male,HC,SRBPS,1581.96936589072,CiNet,SIEMENS TimTrio
+sub-1315,25.0,Male,HC,SRBPS,1678.55466329841,ATR ,SIEMENS Verio
+sub-1377,35.0,Male,HC,SRBPS,1453.8878809451,CiNet,SIEMENS TimTrio
+sub-1323,20.0,Male,HC,SRBPS,1542.54041089461,ATR ,SIEMENS Verio
+sub-0764,63.0,Male,HC,SRBPS,1424.67421382027,Kyoto university,SIEMENS  TimTrio
+sub-1358,53.0,Male,HC,SRBPS,1571.3217765363,CiNet,SIEMENS TimTrio
+sub-0763,45.0,Male,HC,SRBPS,1381.73716612391,Kyoto university,SIEMENS  TimTrio
+sub-0006,24.0,Male,HC,SRBPS,1460.56338039051,Showa university,SIEMENS  Verio
+sub-1376,23.0,Male,HC,SRBPS,1696.39969008598,CiNet,SIEMENS TimTrio
+sub-1334,21.0,Male,HC,SRBPS,1577.72160666306,ATR ,SIEMENS Verio
+sub-0747,47.0,Male,HC,SRBPS,1747.9505249809,Kyoto university,SIEMENS  TimTrio
+sub-0618,22.0,Male,HC,SRBPS,1659.36039607843,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0495,66.0,Male,HC,SRBPS,1452.7380627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1366,22.0,Male,HC,SRBPS,1643.51749408429,CiNet,SIEMENS TimTrio
+sub-0548,67.0,Male,HC,SRBPS,1677.89494901961,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0212,31.0,Male,HC,SRBPS,1536.16710196078,Showa university,SIEMENS  Verio
+sub-0392,27.0,Male,HC,SRBPS,1551.81028172259,Hiroshima University Hospital,GE Signa HDxt
+sub-0570,74.0,Male,HC,SRBPS,1454.96715686275,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1330,26.0,Male,HC,SRBPS,1504.41762953377,ATR ,SIEMENS Verio
+sub-0801,60.0,Male,HC,SRBPS,1413.56334094015,Kyoto university,SIEMENS  TimTrio
+sub-1312,23.0,Male,HC,SRBPS,1474.90898442862,ATR ,SIEMENS Verio
+sub-0328,46.0,Male,HC,SRBPS,1664.31564902416,Hiroshima University Hospital,GE Signa HDxt
+sub-0192,23.0,Male,HC,SRBPS,1641.02949803922,Showa university,SIEMENS  Verio
+sub-0346,34.0,Male,HC,SRBPS,1636.35150028941,Hiroshima University Hospital,GE Signa HDxt
+sub-0424,23.0,Male,HC,SRBPS,1713.68502199222,Hiroshima University Hospital,GE Signa HDxt
+sub-0213,32.0,Male,HC,SRBPS,1436.52645882353,Showa university,SIEMENS  Verio
+sub-1374,24.0,Male,HC,SRBPS,1493.69260053632,CiNet,SIEMENS TimTrio
+sub-0844,45.0,Male,HC,SRBPS,1681.26964204181,Kyoto university,SIEMENS  TimTrio
+sub-0171,25.0,Male,HC,SRBPS,1540.17769232767,Showa university,SIEMENS  Verio
+sub-0594,58.0,Male,HC,SRBPS,1598.10854901961,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0872,20.0,Male,HC,SRBPS,1487.79293274091,Kyoto university,SIEMENS  TimTrio
+sub-0252,23.0,Male,HC,SRBPS,1642.19717242972,Hiroshima University Hospital,GE Signa HDxt
+sub-1342,24.0,Male,HC,SRBPS,1617.54176638306,ATR ,SIEMENS TimTrio
+sub-1347,22.0,Male,HC,SRBPS,1626.06205905887,ATR ,SIEMENS TimTrio
+sub-1316,22.0,Male,HC,SRBPS,1419.95434366793,ATR ,SIEMENS Verio
+sub-1070,31.0,Male,HC,SRBPS,1602.15458151722,University of Tokyo,GE Discovery MR750w
+sub-1004,36.0,Male,HC,SRBPS,1721.03136960479,Kyoto university ,SIEMENS Trio
+sub-0599,77.0,Male,HC,SRBPS,1557.29940784314,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0756,49.0,Male,HC,SRBPS,1563.17019090867,Kyoto university,SIEMENS  TimTrio
+sub-0601,56.0,Male,HC,SRBPS,1629.49484705882,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0781,42.0,Male,HC,SRBPS,1542.91563410975,Kyoto university,SIEMENS  TimTrio
+sub-0958,20.0,Male,HC,SRBPS,1404.89858156791,Kyoto university ,SIEMENS Trio
+sub-0013,24.0,Male,HC,SRBPS,1561.566,Showa university,SIEMENS  Verio
+sub-0964,21.0,Male,HC,SRBPS,1531.58622895484,Kyoto university ,SIEMENS Trio
+sub-0370,42.0,Male,HC,SRBPS,1675.89842498266,Hiroshima University Hospital,GE Signa HDxt
+sub-1067,37.0,Male,HC,SRBPS,1610.03789562311,University of Tokyo,GE Discovery MR750w
+sub-0835,44.0,Male,HC,SRBPS,1492.38555860907,Kyoto university,SIEMENS  TimTrio
+sub-1097,29.0,Male,HC,SRBPS,1570.00115340853,University of Tokyo,GE Discovery MR750w
+sub-1356,52.0,Male,HC,SRBPS,1542.67600682582,CiNet,SIEMENS TimTrio
+sub-0475,32.0,Male,HC,SRBPS,1643.10936527672,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0808,45.0,Male,HC,SRBPS,1532.2658751645,Kyoto university,SIEMENS  TimTrio
+sub-0843,66.0,Male,HC,SRBPS,1685.09237699314,Kyoto university,SIEMENS  TimTrio
+sub-1296,20.0,Male,HC,SRBPS,1423.80575644546,ATR ,SIEMENS TimTrio
+sub-1105,80.0,Male,HC,SRBPS,1557.98969729527,University of Tokyo,GE Discovery MR750w
+sub-0499,31.0,Male,HC,SRBPS,1775.49654509804,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1023,63.0,Male,HC,SRBPS,1585.87121233072,University of Tokyo,GE Discovery MR750w
+sub-0234,36.0,Male,HC,SRBPS,1630.74962745098,Showa university,SIEMENS  Verio
+sub-1034,44.0,Male,HC,SRBPS,1677.95171159951,University of Tokyo,GE Discovery MR750w
+sub-0177,31.0,Male,HC,SRBPS,1747.95676078431,Showa university,SIEMENS  Verio
+sub-0110,23.0,Male,HC,SRBPS,1391.98465882353,Showa university,SIEMENS  Verio
+sub-0107,28.0,Male,HC,SRBPS,1628.8548,Showa university,SIEMENS  Verio
+sub-1104,29.0,Male,HC,SRBPS,1490.40548206927,University of Tokyo,GE Discovery MR750w
+sub-0766,48.0,Male,HC,SRBPS,1543.37521631738,Kyoto university,SIEMENS  TimTrio
+sub-0035,33.0,Male,HC,SRBPS,1516.17292941176,Showa university,SIEMENS  Verio
+sub-1114,38.0,Male,HC,SRBPS,1697.544737319,University of Tokyo,GE Discovery MR750w
+sub-1332,25.0,Male,HC,SRBPS,1875.39373624226,ATR ,SIEMENS Verio
+sub-0944,31.0,Male,HC,SRBPS,1735.49723803763,Kyoto university ,SIEMENS Trio
+sub-0784,22.0,Male,HC,SRBPS,1411.57229049135,Kyoto university,SIEMENS  TimTrio
+sub-0016,24.0,Male,HC,SRBPS,1495.47374509804,Showa university,SIEMENS  Verio
+sub-0197,23.0,Male,HC,SRBPS,1659.39208627451,Showa university,SIEMENS  Verio
+sub-0041,23.0,Male,HC,SRBPS,1637.1601372549,Showa university,SIEMENS  Verio
+sub-0752,35.0,Male,HC,SRBPS,1551.89250093592,Kyoto university,SIEMENS  TimTrio
+sub-0992,25.0,Male,HC,SRBPS,1418.79822668529,Kyoto university ,SIEMENS Trio
+sub-0418,31.0,Male,HC,SRBPS,1560.03681140112,Hiroshima University Hospital,GE Signa HDxt
+sub-0200,38.0,Male,HC,SRBPS,1645.80264313726,Showa university,SIEMENS  Verio
+sub-0586,40.0,Male,HC,SRBPS,1512.45020392157,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0787,22.0,Male,HC,SRBPS,1484.14311623728,Kyoto university,SIEMENS  TimTrio
+sub-0732,27.0,Male,HC,SRBPS,1786.22491369477,Kyoto university,SIEMENS  TimTrio
+sub-0477,40.0,Male,HC,SRBPS,1250.50337958222,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1322,30.0,Male,HC,SRBPS,1564.78161295873,ATR ,SIEMENS Verio
+sub-0353,38.0,Male,HC,SRBPS,1451.74061371202,Hiroshima University Hospital,GE Signa HDxt
+sub-0296,25.0,Male,HC,SRBPS,1633.57888693456,Hiroshima University Hospital,GE Signa HDxt
+sub-0946,19.0,Male,HC,SRBPS,1525.01199905764,Kyoto university ,SIEMENS Trio
+sub-1314,24.0,Male,HC,SRBPS,1545.40841728846,ATR ,SIEMENS Verio
+sub-1050,68.0,Male,HC,SRBPS,1305.20710879379,University of Tokyo,GE Discovery MR750w
+sub-0351,61.0,Male,HC,SRBPS,1585.03371310307,Hiroshima University Hospital,GE Signa HDxt
+sub-0718,33.0,Male,HC,SRBPS,1510.01700996177,Kyoto university,SIEMENS  TimTrio
+sub-0412,34.0,Male,HC,SRBPS,1618.68418697353,Hiroshima University Hospital,GE Signa HDxt
+sub-0864,45.0,Male,HC,SRBPS,1591.88287584397,Kyoto university,SIEMENS  TimTrio
+sub-0262,23.0,Male,HC,SRBPS,1451.78602182425,Hiroshima University Hospital,GE Signa HDxt
+sub-1057,35.0,Male,HC,SRBPS,1530.52164784735,University of Tokyo,GE Discovery MR750w
+sub-0733,24.0,Male,HC,SRBPS,1599.4484932526,Kyoto university,SIEMENS  TimTrio
+sub-0193,23.0,Male,HC,SRBPS,1569.15487058824,Showa university,SIEMENS  Verio
+sub-1361,37.0,Male,HC,SRBPS,1498.85305225374,CiNet,SIEMENS TimTrio
+sub-0615,51.0,Male,HC,SRBPS,1634.80494117647,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1326,20.0,Male,HC,SRBPS,1603.23231711746,ATR ,SIEMENS Verio
+sub-0172,21.0,Male,HC,SRBPS,1602.5034627451,Showa university,SIEMENS  Verio
+sub-1308,24.0,Male,HC,SRBPS,1531.5042316597,ATR ,SIEMENS Verio
+sub-0453,47.0,Male,HC,SRBPS,1479.59924105771,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0179,20.0,Male,HC,SRBPS,1740.52818039216,Showa university,SIEMENS  Verio
+sub-0284,27.0,Male,HC,SRBPS,1762.86051128007,Hiroshima University Hospital,GE Signa HDxt
+sub-0735,37.0,Male,HC,SRBPS,1308.50000860914,Kyoto university,SIEMENS  TimTrio
+sub-0761,39.0,Male,HC,SRBPS,1594.37489886094,Kyoto university,SIEMENS  TimTrio
+sub-0798,24.0,Male,HC,SRBPS,1481.126646842,Kyoto university,SIEMENS  TimTrio
+sub-0986,47.0,Male,HC,SRBPS,1443.65201639503,Kyoto university ,SIEMENS Trio
+sub-1375,40.0,Male,HC,SRBPS,1546.73558947549,CiNet,SIEMENS TimTrio
+sub-1051,40.0,Male,HC,SRBPS,1505.08091118969,University of Tokyo,GE Discovery MR750w
+sub-0194,23.0,Male,HC,SRBPS,1713.28248627451,Showa university,SIEMENS  Verio
+sub-0987,26.0,Male,HC,SRBPS,1649.97459626697,Kyoto university ,SIEMENS Trio
+sub-0608,32.0,Male,HC,SRBPS,1663.58597647059,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0809,20.0,Male,HC,SRBPS,1534.28531973426,Kyoto university,SIEMENS  TimTrio
+sub-0826,20.0,Male,HC,SRBPS,1385.03987340212,Kyoto university,SIEMENS  TimTrio
+sub-0818,55.0,Male,HC,SRBPS,1467.80502962483,Kyoto university,SIEMENS  TimTrio
+sub-0848,23.0,Male,HC,SRBPS,1643.66160361748,Kyoto university,SIEMENS  TimTrio
+sub-0984,34.0,Male,HC,SRBPS,1754.10131371754,Kyoto university ,SIEMENS Trio
+sub-1372,25.0,Male,HC,SRBPS,1435.05285160758,CiNet,SIEMENS TimTrio
+sub-0560,61.0,Male,HC,SRBPS,1735.82040784314,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1317,22.0,Male,HC,SRBPS,1585.94526423298,ATR ,SIEMENS TimTrio
+sub-0113,21.0,Male,HC,SRBPS,1470.83603921569,Showa university,SIEMENS  Verio
+sub-1030,29.0,Male,HC,SRBPS,1355.2286156243,University of Tokyo,GE Discovery MR750w
+sub-1045,35.0,Male,HC,SRBPS,1452.62725612841,University of Tokyo,GE Discovery MR750w
+sub-0196,23.0,Male,HC,SRBPS,1735.67253333333,Showa university,SIEMENS  Verio
+sub-0751,42.0,Male,HC,SRBPS,1462.21474629958,Kyoto university,SIEMENS  TimTrio
+sub-0014,39.0,Male,HC,SRBPS,1617.72437254902,Showa university,SIEMENS  Verio
+sub-0209,31.0,Male,HC,SRBPS,1592.51577254902,Showa university,SIEMENS  Verio
+sub-0187,21.0,Male,HC,SRBPS,1740.91934117647,Showa university,SIEMENS  Verio
+sub-0815,78.0,Male,HC,SRBPS,1870.43133891209,Kyoto university,SIEMENS  TimTrio
+sub-0401,46.0,Male,HC,SRBPS,1611.05672579145,Hiroshima University Hospital,GE Signa HDxt
+sub-0491,38.0,Male,HC,SRBPS,1663.55544313725,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0242,63.0,Male,HC,SRBPS,1564.97950794193,Hiroshima University Hospital,GE Signa HDxt
+sub-1331,24.0,Male,HC,SRBPS,1554.45325986983,ATR ,SIEMENS Verio
+sub-0983,32.0,Male,HC,SRBPS,1514.78099708714,Kyoto university ,SIEMENS Trio
+sub-0966,20.0,Male,HC,SRBPS,1234.10132437121,Kyoto university ,SIEMENS Trio
+sub-0823,38.0,Male,HC,SRBPS,1417.98684971226,Kyoto university,SIEMENS  TimTrio
+sub-0190,24.0,Male,HC,SRBPS,1774.06234901961,Showa university,SIEMENS  Verio
+sub-0825,55.0,Male,HC,SRBPS,1553.04012098607,Kyoto university,SIEMENS  TimTrio
+sub-0970,19.0,Male,HC,SRBPS,1458.41187855651,Kyoto university ,SIEMENS Trio
+sub-0956,34.0,Male,HC,SRBPS,1592.45892428205,Kyoto university ,SIEMENS Trio
+sub-0997,44.0,Male,HC,SRBPS,1508.5053020881,Kyoto university ,SIEMENS Trio
+sub-1307,21.0,Male,HC,SRBPS,1568.08354110949,ATR ,SIEMENS Verio
+sub-0173,22.0,Male,HC,SRBPS,1675.26425159828,Showa university,SIEMENS  Verio
+sub-0236,39.0,Male,HC,SRBPS,1750.16506521134,Hiroshima University Hospital,GE Signa HDxt
+sub-0350,23.0,Male,HC,SRBPS,1370.72549767641,Hiroshima University Hospital,GE Signa HDxt
+sub-0469,46.0,Male,HC,SRBPS,1538.98915961957,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0024,36.0,Male,HC,SRBPS,1548.14078823529,Showa university,SIEMENS  Verio
+sub-0977,38.0,Male,HC,SRBPS,1461.33475012735,Kyoto university ,SIEMENS Trio
+sub-0731,43.0,Male,HC,SRBPS,1615.77005002607,Kyoto university,SIEMENS  TimTrio
+sub-1327,24.0,Male,HC,SRBPS,1497.16165043403,ATR ,SIEMENS Verio
+sub-0386,29.0,Male,HC,SRBPS,1796.82330897935,Hiroshima University Hospital,GE Signa HDxt
+sub-0954,28.0,Male,HC,SRBPS,1433.56380966318,Kyoto university ,SIEMENS Trio
+sub-0040,27.0,Male,HC,SRBPS,1690.38096862745,Showa university,SIEMENS  Verio
+sub-0489,29.0,Male,HC,SRBPS,1562.14587058824,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0736,21.0,Male,HC,SRBPS,1394.41510258257,Kyoto university,SIEMENS  TimTrio
+sub-0021,52.0,Male,HC,SRBPS,1679.1599372549,Showa university,SIEMENS  Verio
+sub-0240,48.0,Male,HC,SRBPS,1676.78320990222,Hiroshima University Hospital,GE Signa HDxt
+sub-0840,19.0,Male,HC,SRBPS,1435.78055745429,Kyoto university,SIEMENS  TimTrio
+sub-0837,20.0,Male,HC,SRBPS,1512.46668367386,Kyoto university,SIEMENS  TimTrio
+sub-0773,60.0,Male,HC,SRBPS,1623.07125086647,Kyoto university,SIEMENS  TimTrio
+sub-0803,30.0,Male,HC,SRBPS,1666.54239961236,Kyoto university,SIEMENS  TimTrio
+sub-0830,45.0,Male,HC,SRBPS,1631.27611873645,Kyoto university,SIEMENS  TimTrio
+sub-1063,44.0,Male,HC,SRBPS,1301.19590091023,University of Tokyo,GE Discovery MR750w
+sub-0326,32.0,Male,HC,SRBPS,1633.59717378903,Hiroshima University Hospital,GE Signa HDxt
+sub-0524,41.0,Male,HC,SRBPS,1567.53729019608,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1059,53.0,Female,HC,SRBPS,1238.76164583716,University of Tokyo,GE Discovery MR750w
+sub-0459,54.0,Female,HC,SRBPS,1448.58393703777,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0631,51.0,Female,HC,SRBPS,1267.93178039216,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0612,61.0,Female,HC,SRBPS,1211.49910588235,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0393,34.0,Female,HC,SRBPS,1396.44791968726,Hiroshima University Hospital,GE Signa HDxt
+sub-0030,31.0,Female,HC,SRBPS,1411.90329019608,Showa university,SIEMENS  Verio
+sub-0366,29.0,Female,HC,SRBPS,1489.36102405542,Hiroshima University Hospital,GE Signa HDxt
+sub-0847,22.0,Female,HC,SRBPS,1210.55012797404,Kyoto university,SIEMENS  TimTrio
+sub-0357,47.0,Female,HC,SRBPS,1289.90989188334,Hiroshima University Hospital,GE Signa HDxt
+sub-0022,55.0,Female,HC,SRBPS,1385.93891764706,Showa university,SIEMENS  Verio
+sub-0248,33.0,Female,HC,SRBPS,1578.56329303382,Hiroshima University Hospital,GE Signa HDxt
+sub-0980,35.0,Female,HC,SRBPS,1506.7958659602,Kyoto university ,SIEMENS Trio
+sub-0276,21.0,Female,HC,SRBPS,1372.4020879466,Hiroshima University Hospital,GE Signa HDxt
+sub-0669,38.0,Female,HC,SRBPS,1267.22636078431,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0720,52.0,Female,HC,SRBPS,1377.33402748342,Kyoto university,SIEMENS  TimTrio
+sub-0332,44.0,Female,HC,SRBPS,1560.48700016709,Hiroshima University Hospital,GE Signa HDxt
+sub-0558,61.0,Female,HC,SRBPS,1444.27175294118,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0863,35.0,Female,HC,SRBPS,1496.97181081825,Kyoto university,SIEMENS  TimTrio
+sub-0959,21.0,Female,HC,SRBPS,1430.68454051058,Kyoto university ,SIEMENS Trio
+sub-0985,30.0,Female,HC,SRBPS,1362.6591927431,Kyoto university ,SIEMENS Trio
+sub-1305,26.0,Female,HC,SRBPS,1284.80605169272,ATR ,SIEMENS Verio
+sub-0638,46.0,Female,HC,SRBPS,1521.53336078431,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0396,55.0,Female,HC,SRBPS,1320.19384787806,Hiroshima University Hospital,GE Signa HDxt
+sub-1106,61.0,Female,HC,SRBPS,1518.02997113409,University of Tokyo,GE Discovery MR750w
+sub-0642,48.0,Female,HC,SRBPS,1420.04152941176,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1329,22.0,Female,HC,SRBPS,1241.19950980392,ATR ,SIEMENS Verio
+sub-0988,26.0,Female,HC,SRBPS,1371.67580727163,Kyoto university ,SIEMENS Trio
+sub-0628,68.0,Female,HC,SRBPS,1281.42046666667,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0772,68.0,Female,HC,SRBPS,1348.0489108505,Kyoto university,SIEMENS  TimTrio
+sub-1027,42.0,Female,HC,SRBPS,1427.72595219877,University of Tokyo,GE Discovery MR750w
+sub-1085,32.0,Female,HC,SRBPS,1411.83109980581,University of Tokyo,GE Discovery MR750w
+sub-0384,48.0,Female,HC,SRBPS,1252.09405130279,Hiroshima University Hospital,GE Signa HDxt
+sub-1378,61.0,Female,HC,SRBPS,1379.12247440373,CiNet,SIEMENS TimTrio
+sub-0652,35.0,Female,HC,SRBPS,1546.41498431373,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0406,56.0,Female,HC,SRBPS,1342.82215978554,Hiroshima University Hospital,GE Signa HDxt
+sub-1044,79.0,Female,HC,SRBPS,1249.97447358038,University of Tokyo,GE Discovery MR750w
+sub-0534,55.0,Female,HC,SRBPS,1407.0140745098,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0788,22.0,Female,HC,SRBPS,1608.25056624057,Kyoto university,SIEMENS  TimTrio
+sub-0666,54.0,Female,HC,SRBPS,1359.97285098039,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0447,46.0,Female,HC,SRBPS,1351.75470123715,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0588,79.0,Female,HC,SRBPS,1375.07666666667,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0661,45.0,Female,HC,SRBPS,1470.85770980392,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1350,24.0,Female,HC,SRBPS,1448.10423665796,CiNet,SIEMENS TimTrio
+sub-0415,51.0,Female,HC,SRBPS,1303.08030738594,Hiroshima University Hospital,GE Signa HDxt
+sub-1386,44.0,Female,HC,SRBPS,1371.17502319997,CiNet,SIEMENS TimTrio
+sub-0318,31.0,Female,HC,SRBPS,1363.63462201041,Hiroshima University Hospital,GE Signa HDxt
+sub-0028,30.0,Female,HC,SRBPS,1481.44678039216,Showa university,SIEMENS  Verio
+sub-1081,72.0,Female,HC,SRBPS,1322.64587410464,University of Tokyo,GE Discovery MR750w
+sub-1071,33.0,Female,HC,SRBPS,1377.21077960108,University of Tokyo,GE Discovery MR750w
+sub-0394,38.0,Female,HC,SRBPS,1462.44653460668,Hiroshima University Hospital,GE Signa HDxt
+sub-0779,35.0,Female,HC,SRBPS,1483.72039518273,Kyoto university,SIEMENS  TimTrio
+sub-1359,67.0,Female,HC,SRBPS,1244.18309649637,CiNet,SIEMENS TimTrio
+sub-0943,40.0,Female,HC,SRBPS,1478.2286574856,Kyoto university ,SIEMENS Trio
+sub-1110,40.0,Female,HC,SRBPS,1410.60210959298,University of Tokyo,GE Discovery MR750w
+sub-1118,65.0,Female,HC,SRBPS,1426.53752561854,University of Tokyo,GE Discovery MR750w
+sub-0508,41.0,Female,HC,SRBPS,1451.61436862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0827,46.0,Female,HC,SRBPS,1376.75123000823,Kyoto university,SIEMENS  TimTrio
+sub-0302,22.0,Female,HC,SRBPS,1454.1999652973,Hiroshima University Hospital,GE Signa HDxt
+sub-0399,34.0,Female,HC,SRBPS,1543.6904213972,Hiroshima University Hospital,GE Signa HDxt
+sub-0342,23.0,Female,HC,SRBPS,1468.97926908151,Hiroshima University Hospital,GE Signa HDxt
+sub-0552,61.0,Female,HC,SRBPS,1358.90725098039,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0514,49.0,Female,HC,SRBPS,1387.03354901961,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0441,30.0,Female,HC,SRBPS,1442.97100422415,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0828,49.0,Female,HC,SRBPS,1300.04179002669,Kyoto university,SIEMENS  TimTrio
+sub-0791,44.0,Female,HC,SRBPS,1416.39286078547,Kyoto university,SIEMENS  TimTrio
+sub-0368,53.0,Female,HC,SRBPS,1583.0217934015,Hiroshima University Hospital,GE Signa HDxt
+sub-0544,29.0,Female,HC,SRBPS,1318.79830196078,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0487,68.0,Female,HC,SRBPS,1343.53590980392,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0414,32.0,Female,HC,SRBPS,1122.72496433113,Hiroshima University Hospital,GE Signa HDxt
+sub-0246,31.0,Female,HC,SRBPS,1439.05176425972,Hiroshima University Hospital,GE Signa HDxt
+sub-0841,21.0,Female,HC,SRBPS,1673.10712925464,Kyoto university,SIEMENS  TimTrio
+sub-0445,30.0,Female,HC,SRBPS,1786.34794659354,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-1095,36.0,Female,HC,SRBPS,1388.997347091,University of Tokyo,GE Discovery MR750w
+sub-0481,65.0,Male,HC,SRBPS,1471.82004791305,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0198,23.0,Male,HC,SRBPS,1540.95507058824,Showa university,SIEMENS  Verio
+sub-0005,24.0,Male,HC,SRBPS,1603.14719215686,Showa university,SIEMENS  Verio
+sub-1058,67.0,Male,HC,SRBPS,1592.12656908911,University of Tokyo,GE Discovery MR750w
+sub-0185,20.0,Male,HC,SRBPS,1856.39517254902,Showa university,SIEMENS  Verio
+sub-0978,33.0,Male,HC,SRBPS,1573.78144827501,Kyoto university ,SIEMENS Trio
+sub-0793,20.0,Male,HC,SRBPS,1584.360469408,Kyoto university,SIEMENS  TimTrio
+sub-0180,24.0,Male,HC,SRBPS,1814.69194117647,Showa university,SIEMENS  Verio
+sub-0003,26.0,Male,HC,SRBPS,1627.8415372549,Showa university,SIEMENS  Verio
+sub-0026,32.0,Male,HC,SRBPS,1634.84334117647,Showa university,SIEMENS  Verio
+sub-0846,42.0,Male,HC,SRBPS,1602.66175262612,Kyoto university,SIEMENS  TimTrio
+sub-1346,22.0,Male,HC,SRBPS,1652.60737647059,ATR ,SIEMENS TimTrio
+sub-0991,26.0,Male,HC,SRBPS,1556.45479477364,Kyoto university ,SIEMENS Trio
+sub-0038,27.0,Male,HC,SRBPS,1586.28202352941,Showa university,SIEMENS  Verio
+sub-0637,65.0,Male,HC,SRBPS,1685.10042352941,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0715,50.0,Male,HC,SRBPS,1444.60087827172,Kyoto university,SIEMENS  TimTrio
+sub-0169,33.0,Male,HC,SRBPS,1483.8745254902,Showa university,SIEMENS  Verio
+sub-0449,49.0,Male,HC,SRBPS,1654.67970433246,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0805,21.0,Male,HC,SRBPS,1476.17617169316,Kyoto university,SIEMENS  TimTrio
+sub-0824,23.0,Male,HC,SRBPS,1488.08618887053,Kyoto university,SIEMENS  TimTrio
+sub-0855,24.0,Male,HC,SRBPS,1599.79781981649,Kyoto university,SIEMENS  TimTrio
+sub-1348,24.0,Male,HC,SRBPS,1510.16557518215,CiNet,SIEMENS TimTrio
+sub-0566,71.0,Male,HC,SRBPS,1487.53471764706,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0201,31.0,Male,HC,SRBPS,1596.22256078431,Showa university,SIEMENS  Verio
+sub-1324,22.0,Male,HC,SRBPS,1696.20444215542,ATR ,SIEMENS Verio
+sub-0576,60.0,Male,HC,SRBPS,1937.23974117647,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1351,67.0,Male,HC,SRBPS,1527.86275728741,CiNet,SIEMENS TimTrio
+sub-0856,51.0,Male,HC,SRBPS,1472.19440046127,Kyoto university,SIEMENS  TimTrio
+sub-0512,40.0,Male,HC,SRBPS,1551.10523921569,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0750,48.0,Male,HC,SRBPS,1414.3383524436,Kyoto university,SIEMENS  TimTrio
+sub-0873,24.0,Male,HC,SRBPS,1730.96487992224,Kyoto university,SIEMENS  TimTrio
+sub-0993,21.0,Male,HC,SRBPS,1722.78222097086,Kyoto university ,SIEMENS Trio
+sub-1033,51.0,Male,HC,SRBPS,1570.84914058913,University of Tokyo,GE Discovery MR750w
+sub-0195,22.0,Male,HC,SRBPS,1635.63660392157,Showa university,SIEMENS  Verio
+sub-1008,39.0,Male,HC,SRBPS,1648.96955023246,Kyoto university ,SIEMENS Trio
+sub-1373,23.0,Male,HC,SRBPS,1523.51040517141,CiNet,SIEMENS TimTrio
+sub-0605,49.0,Male,HC,SRBPS,1629.76816078431,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-0208,30.0,Male,HC,SRBPS,1803.37148627451,Showa university,SIEMENS  Verio
+sub-0950,19.0,Male,HC,SRBPS,1678.45702239493,Kyoto university ,SIEMENS Trio
+sub-1079,56.0,Male,HC,SRBPS,1475.53882092818,University of Tokyo,GE Discovery MR750w
+sub-0400,60.0,Male,HC,SRBPS,1562.54799255329,Hiroshima University Hospital,GE Signa HDxt
+sub-0759,38.0,Male,HC,SRBPS,1490.40670632056,Kyoto university,SIEMENS  TimTrio
+sub-1094,39.0,Male,HC,SRBPS,1637.42033284755,University of Tokyo,GE Discovery MR750w
+sub-1113,50.0,Male,HC,SRBPS,1438.27746216216,University of Tokyo,GE Discovery MR750w
+sub-0622,70.0,Male,HC,SRBPS,1598.8788627451,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1074,37.0,Male,HC,SRBPS,1388.98883829025,University of Tokyo,GE Discovery MR750w
+sub-1319,22.0,Male,HC,SRBPS,1457.39835209301,ATR ,SIEMENS TimTrio
+sub-0294,33.0,Male,HC,SRBPS,1680.33417753978,Hiroshima University Hospital,GE Signa HDxt
+sub-1298,22.0,Male,HC,SRBPS,1555.71283835168,ATR ,SIEMENS Verio
+sub-0473,60.0,Male,HC,SRBPS,1525.83478776917,Hiroshima Kajikawa Hospital,SIEMENS Spectra
+sub-0617,51.0,Male,HC,SRBPS,1533.88176862745,Center of Innovation in Hiroshima University,SIEMENS MAGNETOM Verio.Dot
+sub-1365,44.0,Male,HC,SRBPS,1520.41361134592,CiNet,SIEMENS TimTrio
+sub-0233,43.0,Male,HC,SRBPS,1496.98392941176,Showa university,SIEMENS  Verio
+sub-1379,55.0,Male,HC,SRBPS,1603.36280666889,CiNet,SIEMENS TimTrio
+sub-0112,22.0,Male,HC,SRBPS,1400.97031372549,Showa university,SIEMENS  Verio
+sub-1056,52.0,Male,HC,SRBPS,1541.1541977066,University of Tokyo,GE Discovery MR750w
+sub-0004,23.0,Male,HC,SRBPS,1721.99787843137,Showa university,SIEMENS  Verio
+sub-0990,39.0,Male,HC,SRBPS,1835.27876326966,Kyoto university ,SIEMENS Trio
+sub-0979,31.0,Male,HC,SRBPS,1629.9012668983,Kyoto university ,SIEMENS Trio
+sub-0199,23.0,Male,HC,SRBPS,1460.30331764706,Showa university,SIEMENS  Verio
+sub-0753,58.0,Male,HC,SRBPS,1812.6472686047,Kyoto university,SIEMENS  TimTrio
+sub-1368,42.0,Male,HC,SRBPS,1482.36257309345,CiNet,SIEMENS TimTrio
+sub-0822,20.0,Male,HC,SRBPS,1351.67357496875,Kyoto university,SIEMENS  TimTrio
+sub-1040,34.0,Male,HC,SRBPS,1635.05018285527,University of Tokyo,GE Discovery MR750w
+sub-1052,47.0,Male,HC,SRBPS,1587.95103893467,University of Tokyo,GE Discovery MR750w
+sub-0352,54.0,Male,HC,SRBPS,1565.90947725243,Hiroshima University Hospital,GE Signa HDxt
+sub-0776,40.0,Male,HC,SRBPS,1560.85029030515,Kyoto university,SIEMENS  TimTrio
+sub-0104,19.0,Male,HC,SRBPS,1430.01098823529,Showa university,SIEMENS  Verio
+sub-0205,42.0,Male,HC,SRBPS,1754.69325098039,Showa university,SIEMENS  Verio
+sub-0174,22.0,Male,HC,SRBPS,1730.26591372549,Showa university,SIEMENS  Verio
+sub-0422,36.0,Male,HC,SRBPS,1395.53512306394,Hiroshima University Hospital,GE Signa HDxt
+sub-0354,66.0,Male,HC,SRBPS,1543.98711615168,Hiroshima University Hospital,GE Signa HDxt
+sub-0282,21.0,Male,HC,SRBPS,1634.13262967483,Hiroshima University Hospital,GE Signa HDxt
+sub-0778,22.0,Male,HC,SRBPS,1482.54324253357,Kyoto university,SIEMENS  TimTrio
+sub-0760,64.0,Male,HC,SRBPS,1625.00583011593,Kyoto university,SIEMENS  TimTrio
+sub-0186,24.0,Male,HC,SRBPS,1772.35847843137,Showa university,SIEMENS  Verio
+sub-0416,65.0,Male,HC,SRBPS,1495.29292079074,Hiroshima University Hospital,GE Signa HDxt
+sub-0340,39.0,Male,HC,SRBPS,1686.65989932683,Hiroshima University Hospital,GE Signa HDxt
+sub-0232,42.0,Male,HC,SRBPS,1571.62083921569,Showa university,SIEMENS  Verio
+sub-0025,49.0,Male,HC,SRBPS,1403.92705490196,Showa university,SIEMENS  Verio
+sub-0789,22.0,Male,HC,SRBPS,1613.29101568565,Kyoto university,SIEMENS  TimTrio
+sub-0288,24.0,Male,HC,SRBPS,1572.80492190011,Hiroshima University Hospital,GE Signa HDxt
+sub-1005,31.0,Male,HC,SRBPS,1630.56662226135,Kyoto university ,SIEMENS Trio
+sub-1321,23.0,Male,HC,SRBPS,1494.80530028638,ATR ,SIEMENS Verio
+sub-1303,25.0,Male,HC,SRBPS,1519.97059399261,ATR ,SIEMENS Verio

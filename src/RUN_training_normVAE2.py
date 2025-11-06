@@ -93,7 +93,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
          no_cuda: bool, seed: int, normalization_method: str = 'rowwise', output_dir: str = None):
     ## 0. Set Up ----------------------------------------------------------
     # Set main paths
-    path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
+    path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata_no_bad_scans.csv"
     path_to_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training"
     
     # Splits the metadata file with ALL Patients in a training and test set

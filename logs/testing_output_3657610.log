@@ -298,3 +298,117 @@ SCHZ       (n=866): score=0.514±0.159, zscore=0.175±0.914
 [INFO] Found 644 regional z-score columns
 [INFO] Analyzing MDD (n=328) vs HC (n=838)
 [INFO] Analyzing SCHZ (n=866) vs HC (n=838)
+[INFO] Analyzing CTT (n=83) vs HC (n=838)
+
+[INFO] Creating paper-style plots (Top 16 per diagnosis)...
+  ✓ Created paper-style plot for MDD
+  ✓ Created paper-style plot for SCHZ
+  ✓ Created paper-style plot for CTT
+
+[INFO] Creating Heatmap 1 & 2...
+[INFO] Selected top 30 CTT regions (n=644 total)
+[INFO] Selected top 30 overall regions
+
+[INFO] Creating Heatmap 1: Top 30 CTT-affected regions (3 diagnoses)...
+  ✓ Heatmap 1 created: 30 regions, 3 diagnoses
+
+[INFO] Creating Heatmap 2: Top 30 overall-affected regions (3 diagnoses)...
+  ✓ Heatmap 2 created: 30 regions, 3 diagnoses
+
+[INFO] Regional deviation analysis finished.
+----------[INFO] Saved regional effect sizes to: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438_20251103_161215/regional_effect_sizes_combined.csv
+----------[INFO] 
+Top 20 ROIs with largest Cliff's Delta:
+----------[INFO]                                  ROI_Name Diagnosis  Cliffs_Delta  Significant_Bootstrap_p05_uncorrected
+               [T] rS_central (Destrieux)       CTT      0.483768                                   True
+             [T] lS_front_inf (Destrieux)       CTT      0.414268                                   True
+             [T] llateraloccipital (DK40)       CTT      0.366104                                   True
+         [T] lrostralmiddlefrontal (DK40)       CTT      0.352244                                   True
+                       [GM] rVenDC (IBSR)       CTT     -0.345803                                   True
+          [T] rPole_occipital (Destrieux)       CTT      0.344135                                   True
+             [T] rlateraloccipital (DK40)       CTT      0.337666                                   True
+   [T] lG_temp_sup_G_T_transv (Destrieux)       CTT     -0.330851                                   True
+                      [GM] lRecG (lpba40)       CTT      0.316502                                   True
+         [T] rrostralmiddlefrontal (DK40)       CTT      0.313052                                   True
+          [T] rG_front_middle (Destrieux)       CTT      0.306294                                   True
+             [G] llateraloccipital (DK40)       CTT      0.303419                                   True
+ [T] lS_oc_middle_and_Lunatus (Destrieux)       CTT      0.301090                                   True
+   [T] lG_oc_temp_med_Lingual (Destrieux)       CTT      0.299652                                   True
+                       [GM] rPut (lpba40)      SCHZ      0.291754                                   True
+           [T] ltransversetemporal (DK40)       CTT     -0.291745                                   True
+          [T] lG_front_middle (Destrieux)       CTT      0.290882                                   True
+               [GM] RightPutamen (Neurom)      SCHZ      0.286443                                   True
+                         [GM] rPut (IBSR)      SCHZ      0.283596                                   True
+[GM] RightMOrGMedialOrbitalGyrus (Neurom)       CTT      0.282658                                   True
+----------[INFO] 
+================================================================================
+----------[INFO] CORRELATION WITH CLINICAL VARIABLES
+----------[INFO] ================================================================================
+
+----------[INFO] 
+================================================================================
+----------[INFO] Visualizing latent space embeddings...
+----------[INFO] ================================================================================
+
+Generating embeddings...
+Computing UMAP projection...
+Creating visualization for column: Diagnosis
+Creating visualization for column: Dataset
+Creating visualization for column: Sex
+Saved visualization for 'Diagnosis'
+Saved visualization for 'Dataset'
+Saved visualization for 'Sex'
+----------[INFO] Saved latent space visualizations
+----------[INFO] 
+================================================================================
+----------[INFO] TESTING COMPLETE - SUMMARY
+----------[INFO] ================================================================================
+----------[INFO] Main output directory: /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING/clinical_deviations_norm_results_HC_Vgm_G_T_lpba40_neuromorphometrics_ibsr_aparc_dk40_aparc_destrieux_columnwise_20251103_1438_20251103_161215
+----------[INFO] 
+Key outputs:
+----------[INFO]   - deviation_scores_combined.csv (includes ALL 5 deviation methods)
+----------[INFO]   - deviation_score_summary.csv
+----------[INFO]   - regional_effect_sizes_combined.csv
+----------[INFO] 
+Plots:
+----------[INFO]   Deviation distributions (figures/distributions/):
+----------[INFO]     - score_errorbar_ctt_combined.png (Bootstrap)
+----------[INFO]     - recon_errorbar_ctt_combined.png (Reconstruction)
+----------[INFO]     - kl_errorbar_ctt_combined.png (KL Divergence)
+----------[INFO]     - latent_aguila_errorbar_ctt_combined.png (Aguila method)
+----------[INFO]     - combined_errorbar_ctt_combined.png (Combined)
+----------[INFO]   Regional effect sizes (figures/):
+----------[INFO]     - paper_style_SCHZ_vs_HC.png
+----------[INFO]     - paper_style_MDD_vs_HC.png
+----------[INFO]     - paper_style_CTT_vs_HC.png
+----------[INFO]   Latent embeddings (figures/latent_embeddings/)
+----------[INFO] ================================================================================
+
+
+####################################################################################################
+
+session completed at 2025-11-03 19:10:44.242360.
+
+Configuration:
+    __module__:          utils.config_utils_model
+    __init__:            <function Config_2D.__init__ at 0x2af118e04720>
+    __str__:             <function Config_2D.__str__ at 0x2af118e047c0>
+    __dict__:            <attribute '__dict__' of 'Config_2D' objects>
+    __weakref__:         <attribute '__weakref__' of 'Config_2D' objects>
+    __doc__:             None
+
+
+
+    *      *  |    *
+      *      / \     * 
+    *    *  / _ \  *    *
+           |.o '.|  *
+      *    |'._.'|         done :) 
+         * |     |  *   *
+    *    ,'|  |  |`.   *
+         / |  |  |  \    *
+    *   |,-'--|--'-. |
+    
+    
+
+
