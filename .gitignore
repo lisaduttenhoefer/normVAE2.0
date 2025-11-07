@@ -6,3 +6,13 @@ data/
 data_training/
 /net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/logs
 logs/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_metadata
+combat_neuro/combat_metadata/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results
+combat_neuro/combat_results/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/covariates_franzi
+combat_neuro/covariates_franzi/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/evaluation_plots_run1_with_iqr
+combat_neuro/evaluation_plots_run1_with_iqr/
+/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/evaluation_plots_without_iqr
+combat_neuro/evaluation_plots_without_iqr/

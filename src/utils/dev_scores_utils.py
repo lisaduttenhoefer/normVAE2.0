@@ -43,7 +43,7 @@ def analyze_volume_type_separately(
     atlas_name,
     metadata_path: str = None,
     custom_colors: dict = None,
-    split_ctt: bool = True,
+    split_CAT: bool = True,
     add_catatonia_subgroups: bool = False
 ):
     """
@@ -69,7 +69,7 @@ def analyze_volume_type_separately(
         atlas_name: Atlas name(s) used
         metadata_path: Path to extended metadata (for correlations)
         custom_colors: Dict with custom colors for diagnoses
-        split_ctt: Whether to keep CTT-SCHZ and CTT-MDD separate
+        split_CAT: Whether to keep CAT-SSD and CAT-MDD separate
         add_catatonia_subgroups: Whether to create catatonia subgroups
         
     Returns:
@@ -130,11 +130,11 @@ def analyze_volume_type_separately(
     if custom_colors is None:
         custom_colors = {
             "HC": "#125E8A",
-            "SCHZ": "#3E885B",
+            "SSD": "#3E885B",
             "MDD": "#BEDCFE",
-            "CTT": "#2F4B26",
-            "CTT-SCHZ": "#A67DB8",
-            "CTT-MDD": "#160C28"
+            "CAT": "#2F4B26",
+            "CAT-SSD": "#A67DB8",
+            "CAT-MDD": "#160C28"
         }
     
     print(f"[INFO] Running statistical analysis for {vtype}...")
@@ -145,7 +145,7 @@ def analyze_volume_type_separately(
         vtype_save_dir, 
         col_jitter=False,
         norm_diagnosis=norm_diagnosis, 
-        split_ctt=split_ctt, 
+        split_CAT=split_CAT, 
         custom_colors=custom_colors, 
         name=atlas_volume_string
     )
@@ -163,7 +163,7 @@ def analyze_volume_type_separately(
                 save_dir=vtype_save_dir,
                 correction_method='fdr_bh',
                 alpha=0.05,
-                merge_ctt_groups=not split_ctt,  # Consistent with split_ctt
+                merge_CAT_groups=not split_CAT,  # Consistent with split_CAT
                 name=atlas_volume_string
             )
             print(f"[INFO] Correlation analysis complete for {vtype}")
@@ -186,7 +186,7 @@ def analyze_volume_type_separately(
         results_vtype, 
         vtype_save_dir, 
         norm_diagnosis=norm_diagnosis, 
-        split_ctt=split_ctt,
+        split_CAT=split_CAT,
         custom_colors=custom_colors,
         name=atlas_volume_string
     )
@@ -216,7 +216,7 @@ def analyze_volume_type_separately(
             name=atlas_volume_string,
             add_catatonia_subgroups=add_catatonia_subgroups,
             metadata_path=metadata_path,
-            merge_ctt_groups=not split_ctt
+            merge_CAT_groups=not split_CAT
         )
         
         if regional_results is not None and not regional_results.empty:
@@ -284,23 +284,23 @@ def create_color_summary_table(data, metric, color_col, diagnoses, save_dir):
     return summary_df
 
 def create_colored_jitter_plots(data, metadata_df, metric, summary_df, plot_order, norm_diagnosis,
-                               save_dir, color_columns, diagnosis_palette, split_ctt=False, custom_colors=None):
+                               save_dir, color_columns, diagnosis_palette, split_CAT=False, custom_colors=None):
     """Create jitter plots colored by numerical values from specified columns
     
     Args:
         data: results dataset containing the metric and diagnosis information
         metadata_df: Additional dataframe containing metadata columns for coloring (scores etc)
-        split_ctt: If True, keep CTT-SCHZ and CTT-MDD separate. If False, combine as CTT
+        split_CAT: If True, keep CAT-SSD and CAT-MDD separate. If False, combine as CAT
         custom_colors: Optional dict with custom color mapping for diagnoses
     """
     
     os.makedirs(f"{save_dir}/figures/distributions/colored_by_columns", exist_ok=True)
     
-    # Handle CTT splitting option
+    # Handle CAT splitting option
     data_processed = data.copy()
-    if not split_ctt:
-        # Combine CTT-SCHZ and CTT-MDD into CTT
-        data_processed.loc[data_processed['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+    if not split_CAT:
+        # Combine CAT-SSD and CAT-MDD into CAT
+        data_processed.loc[data_processed['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
     
     # Check if we can merge on filename or need to use index
     merged_data = pd.merge(data_processed, metadata_df, on='Filename', how='inner')
@@ -326,23 +326,23 @@ def create_colored_jitter_plots(data, metadata_df, metric, summary_df, plot_orde
         if color_col in complete_data_columns:
             # Use all diagnoses for Age and Sex -> got metadata for all
             current_plot_order = plot_order.copy()
-            # Adjust plot order based on CTT splitting
-            if not split_ctt and 'CTT-SCHZ' in current_plot_order and 'CTT-MDD' in current_plot_order:
-                current_plot_order = [d for d in current_plot_order if d not in ['CTT-SCHZ', 'CTT-MDD']]
-                if 'CTT' not in current_plot_order:
-                    current_plot_order.append('CTT')
+            # Adjust plot order based on CAT splitting
+            if not split_CAT and 'CAT-SSD' in current_plot_order and 'CAT-MDD' in current_plot_order:
+                current_plot_order = [d for d in current_plot_order if d not in ['CAT-SSD', 'CAT-MDD']]
+                if 'CAT' not in current_plot_order:
+                    current_plot_order.append('CAT')
             filtered_data = merged_data.copy()
             plot_title_suffix = "All Diagnoses"
         else:
-            # Use only CTT-SCHZ and CTT-MDD for other columns -> got metadata only for WhiteCAT and NSS patients
-            if split_ctt:
-                current_plot_order = ['CTT-SCHZ', 'CTT-MDD']
+            # Use only CAT-SSD and CAT-MDD for other columns -> got metadata only for WhiteCAT and NSS patients
+            if split_CAT:
+                current_plot_order = ['CAT-SSD', 'CAT-MDD']
                 filtered_data = merged_data[merged_data['Diagnosis_x'].isin(current_plot_order)].copy()
-                plot_title_suffix = "CTT-SCHZ vs CTT-MDD"
+                plot_title_suffix = "CAT-SSD vs CAT-MDD"
             else:
-                current_plot_order = ['CTT']
-                filtered_data = merged_data[merged_data['Diagnosis_x'] == 'CTT'].copy()
-                plot_title_suffix = "CTT Combined"
+                current_plot_order = ['CAT']
+                filtered_data = merged_data[merged_data['Diagnosis_x'] == 'CAT'].copy()
+                plot_title_suffix = "CAT Combined"
         
         filtered_data = filtered_data.dropna(subset=[color_col, metric])
         
@@ -419,8 +419,8 @@ def create_colored_jitter_plots(data, metadata_df, metric, summary_df, plot_orde
         plt.gca().invert_yaxis()
         plt.tight_layout()
         
-        ctt_suffix = "split" if split_ctt else "combined"
-        filename = f"{metric}_jitterplot_colored_by_{color_col}_ctt_{ctt_suffix}.png"
+        CAT_suffix = "split" if split_CAT else "combined"
+        filename = f"{metric}_jitterplot_colored_by_{color_col}_CAT_{CAT_suffix}.png"
         plt.savefig(f"{save_dir}/figures/distributions/colored_by_columns/{filename}",
                    dpi=300, bbox_inches='tight')
         plt.close()
@@ -659,11 +659,11 @@ def plot_deviation_distributions_all_metrics(results_df, save_dir, norm_diagnosi
     if custom_colors is None:
         custom_colors = {
             "HC": "#125E8A",
-            "SCHZ": "#3E885B",
+            "SSD": "#3E885B",
             "MDD": "#BEDCFE",
-            "CTT": "#2F4B26",
-            "CTT-SCHZ": "#A67DB8",
-            "CTT-MDD": "#160C28"
+            "CAT": "#2F4B26",
+            "CAT-SSD": "#A67DB8",
+            "CAT-MDD": "#160C28"
         }
     
     # Find all deviation columns
@@ -726,7 +726,7 @@ def plot_deviation_distributions_all_metrics(results_df, save_dir, norm_diagnosi
         
         # Save
         metric_name = dev_col.replace('deviation_', '')
-        filename = f"{metric_name}_errorbar_ctt_combined.png"
+        filename = f"{metric_name}_errorbar_CAT_combined.png"
         plt.savefig(f"{save_dir}/figures/distributions/{filename}", 
                    dpi=300, bbox_inches='tight')
         plt.close()
@@ -820,11 +820,11 @@ def plot_all_deviation_metrics_errorbar(results_df, save_dir, norm_diagnosis='HC
     if custom_colors is None:
         custom_colors = {
             "HC": "#125E8A",
-            "SCHZ": "#3E885B",
+            "SSD": "#3E885B",
             "MDD": "#BEDCFE",
-            "CTT": "#2F4B26",
-            "CTT-SCHZ": "#A67DB8",
-            "CTT-MDD": "#160C28"
+            "CAT": "#2F4B26",
+            "CAT-SSD": "#A67DB8",
+            "CAT-MDD": "#160C28"
         }
     
     # Find all deviation columns
@@ -841,12 +841,12 @@ def plot_all_deviation_metrics_errorbar(results_df, save_dir, norm_diagnosis='HC
     
     
     # ========== FILTER TO 4 MAIN DIAGNOSES ==========
-    # Keep only HC, MDD, SCHZ, CTT
-    keep_diagnoses = ['HC', 'MDD', 'SCHZ', 'CTT']
+    # Keep only HC, MDD, SSD, CAT
+    keep_diagnoses = ['HC', 'MDD', 'SSD', 'CAT']
 
-    # First merge CTT-SCHZ and CTT-MDD into CTT
+    # First merge CAT-SSD and CAT-MDD into CAT
     results_df_filtered = results_df.copy()
-    results_df_filtered.loc[results_df_filtered['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+    results_df_filtered.loc[results_df_filtered['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
 
     # Then filter to only keep the 4 main diagnoses
     results_df_filtered = results_df_filtered[results_df_filtered['Diagnosis'].isin(keep_diagnoses)]
@@ -986,7 +986,7 @@ def plot_all_deviation_metrics_errorbar(results_df, save_dir, norm_diagnosis='HC
             
             # Save
             metric_name = dev_col.replace('deviation_score_', '').replace('deviation_score', 'score')
-            filename = f"{metric_name}_errorbar_{statistic}_ctt_combined.png"
+            filename = f"{metric_name}_errorbar_{statistic}_CAT_combined.png"
             save_path = f"{save_dir}/figures/distributions/{filename}"
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close()
@@ -1089,15 +1089,15 @@ def create_paper_style_boxplots(deviation_df, save_dir, norm_diagnosis='HC'):
         
         log_and_print_test(f"✓ Created paper-style boxplot for {nice_label}")
         
-def calculate_group_pvalues(results_df, norm_diagnosis, split_ctt=False):
+def calculate_group_pvalues(results_df, norm_diagnosis, split_CAT=False):
     #Calculate p-values for each diagnosis group compared to the control group
     
 
-    # Handle CTT splitting
+    # Handle CAT splitting
     results_processed = results_df.copy()
-    if not split_ctt:
-        # Combine CTT-SCHZ and CTT-MDD into CTT
-        results_processed.loc[results_processed['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+    if not split_CAT:
+        # Combine CAT-SSD and CAT-MDD into CAT
+        results_processed.loc[results_processed['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
 
     # Get control group data
     control_mask = results_processed["Diagnosis"] == norm_diagnosis
@@ -1151,7 +1151,7 @@ def calculate_group_pvalues(results_df, norm_diagnosis, split_ctt=False):
     
     return group_pvalues
 
-def create_diagnosis_palette(split_ctt=False, custom_colors=None):
+def create_diagnosis_palette(split_CAT=False, custom_colors=None):
     #Create consistent diagnosis color palette
     
     if custom_colors:
@@ -1160,39 +1160,39 @@ def create_diagnosis_palette(split_ctt=False, custom_colors=None):
     # Default color palette
     base_palette = sns.light_palette("blue", n_colors=6, reverse=True)
     
-    if split_ctt:
-        diagnosis_order = ["HC", "SCHZ", "MDD", "CTT", "CTT-MDD", "CTT-SCHZ"]
+    if split_CAT:
+        diagnosis_order = ["HC", "SSD", "MDD", "CAT", "CAT-MDD", "CAT-SSD"]
     else:
-        diagnosis_order = ["HC", "SCHZ", "MDD", "CTT"]
-        base_palette = base_palette[:4]  # Use fewer colors when not splitting CTT
+        diagnosis_order = ["HC", "SSD", "MDD", "CAT"]
+        base_palette = base_palette[:4]  # Use fewer colors when not splitting CAT
     
     diagnosis_palette = dict(zip(diagnosis_order, base_palette))
     
     return diagnosis_palette
 
 def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosis, name,
-                                split_ctt=False, custom_colors=None):
+                                split_CAT=False, custom_colors=None):
     #Plot distributions of deviation metrics by diagnosis group with group p-values
     
     os.makedirs(f"{save_dir}/figures/distributions", exist_ok=True)
     
-    # Handle CTT splitting
+    # Handle CAT splitting
     results_processed = results_df.copy()
-    if not split_ctt:
-        # Combine CTT-SCHZ and CTT-MDD into CTT
-        results_processed.loc[results_processed['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+    if not split_CAT:
+        # Combine CAT-SSD and CAT-MDD into CAT
+        results_processed.loc[results_processed['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
     
     # Create color palette
-    diagnosis_palette = create_diagnosis_palette(split_ctt, custom_colors)
+    diagnosis_palette = create_diagnosis_palette(split_CAT, custom_colors)
 
     # Calculate group p-values
-    group_pvalues = calculate_group_pvalues(results_processed, norm_diagnosis, split_ctt)
+    group_pvalues = calculate_group_pvalues(results_processed, norm_diagnosis, split_CAT)
 
-    # Determine selected diagnoses based on CTT splitting
-    if split_ctt:
-        selected_diagnoses = ["HC", "SCHZ", "MDD", "CTT", "CTT-MDD", "CTT-SCHZ"]
+    # Determine selected diagnoses based on CAT splitting
+    if split_CAT:
+        selected_diagnoses = ["HC", "SSD", "MDD", "CAT", "CAT-MDD", "CAT-SSD"]
     else:
-        selected_diagnoses = ["HC", "SCHZ", "MDD", "CTT"]
+        selected_diagnoses = ["HC", "SSD", "MDD", "CAT"]
 
     # Filter to only include diagnoses that exist in the data
     available_diagnoses = [d for d in selected_diagnoses if d in results_processed["Diagnosis"].unique()]
@@ -1206,8 +1206,8 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
     plt.ylabel("Density", fontsize=14)
     plt.legend(title="Diagnosis", fontsize=12)
     plt.tight_layout()
-    ctt_suffix = "split" if split_ctt else "combined"
-    plt.savefig(f"{save_dir}/figures/distributions/recon_error_dist_ctt_{ctt_suffix}.png", dpi=300)
+    CAT_suffix = "split" if split_CAT else "combined"
+    plt.savefig(f"{save_dir}/figures/distributions/recon_error_dist_CAT_{CAT_suffix}.png", dpi=300)
     plt.close()
     
     # Plot KL divergence distributions
@@ -1219,7 +1219,7 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
     plt.ylabel("Density", fontsize=14)
     plt.legend(title="Diagnosis", fontsize=12)
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/figures/distributions/kl_div_dist_ctt_{ctt_suffix}.png", dpi=300)
+    plt.savefig(f"{save_dir}/figures/distributions/kl_div_dist_CAT_{CAT_suffix}.png", dpi=300)
     plt.close()
     
     # Plot combined deviation score distributions
@@ -1231,7 +1231,7 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
     plt.ylabel("Density", fontsize=14)
     plt.legend(title="Diagnosis", fontsize=12)
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/figures/distributions/deviation_score_dist_ctt_{ctt_suffix}.png", dpi=300)
+    plt.savefig(f"{save_dir}/figures/distributions/deviation_score_dist_CAT_{CAT_suffix}.png", dpi=300)
     plt.close()
     
     # Plot violin plots for all metrics
@@ -1252,7 +1252,7 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
                    x="Diagnosis", y="deviation_score", palette=diagnosis_palette, order=available_diagnoses)
     plt.title("Combined Deviation Score by Diagnosis", fontsize=14)
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/figures/distributions/metrics_violin_plots_ctt_{ctt_suffix}.png", dpi=300)
+    plt.savefig(f"{save_dir}/figures/distributions/metrics_violin_plots_CAT_{CAT_suffix}.png", dpi=300)
     plt.close()
 
     # Calculate summary statistics for errorbar plots
@@ -1307,7 +1307,7 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
         plt.xlabel(f"{metric.replace('_', ' ').title()}", fontsize=12)
         plt.ylabel("Diagnosis", fontsize=12)    
         plt.tight_layout()
-        plt.savefig(f"{save_dir}/figures/distributions/{metric}_errorbar_ctt_{ctt_suffix}.png", dpi=300)
+        plt.savefig(f"{save_dir}/figures/distributions/{metric}_errorbar_CAT_{CAT_suffix}.png", dpi=300)
         plt.close()
         
         # Create jitterplot with p-values and mean values
@@ -1341,7 +1341,7 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
         plt.ylabel("Diagnosis", fontsize=12)
         plt.subplots_adjust(left=0.25)
         plt.tight_layout()
-        plt.savefig(f"{save_dir}/figures/distributions/{metric}_jitterplot_with_values_ctt_{ctt_suffix}.png", 
+        plt.savefig(f"{save_dir}/figures/distributions/{metric}_jitterplot_with_values_CAT_{CAT_suffix}.png", 
                    dpi=300, bbox_inches='tight')
         plt.close()
 
@@ -1370,27 +1370,27 @@ def plot_deviation_distributions(results_df, save_dir, col_jitter, norm_diagnosi
                     save_dir=save_dir,
                     color_columns=color_columns,
                     diagnosis_palette=diagnosis_palette,
-                    split_ctt=split_ctt,
+                    split_CAT=split_CAT,
                     custom_colors=custom_colors
                 )
 
     return summary_dict
 
-def setup_plotting_parameters(split_ctt=False, custom_colors=None):
+def setup_plotting_parameters(split_CAT=False, custom_colors=None):
     #Setup consistent plotting parameters for all functions
    
     
     return {
-        'split_ctt': split_ctt,
+        'split_CAT': split_CAT,
         'custom_colors': custom_colors,
-        'diagnosis_palette': create_diagnosis_palette(split_ctt, custom_colors)
+        'diagnosis_palette': create_diagnosis_palette(split_CAT, custom_colors)
     }
 
 def run_analysis_with_options(results_df, save_dir, col_jitter, norm_diagnosis, name,
-                             split_ctt=False, custom_colors=None):
-    #Run complete analysis with CTT splitting and color options
+                             split_CAT=False, custom_colors=None):
+    #Run complete analysis with CAT splitting and color options
     
-    print(f"Running analysis with CTT {'split' if split_ctt else 'combined'}")
+    print(f"Running analysis with CAT {'split' if split_CAT else 'combined'}")
     if custom_colors:
         print(f"Using custom colors: {custom_colors}")
     
@@ -1400,7 +1400,7 @@ def run_analysis_with_options(results_df, save_dir, col_jitter, norm_diagnosis, 
         save_dir=save_dir,
         col_jitter=col_jitter,
         norm_diagnosis=norm_diagnosis,
-        split_ctt=split_ctt,
+        split_CAT=split_CAT,
         custom_colors=custom_colors,
         name=name
     )
@@ -1624,28 +1624,28 @@ def create_catatonia_subgroups(results_df, metadata_df, subgroup_columns, high_l
     subgroups = {}
     
     # Get Catatonia patients
-    ctt_patients = results_df[results_df["Diagnosis"].str.startswith("CTT")].copy()
-    print(f"Found Catatonia diagnoses: {ctt_patients['Diagnosis'].unique()}")
+    CAT_patients = results_df[results_df["Diagnosis"].str.startswith("CAT")].copy()
+    print(f"Found Catatonia diagnoses: {CAT_patients['Diagnosis'].unique()}")
         
-    if len(ctt_patients) == 0:
-        print("No CTT patients found for subgroup analysis")
+    if len(CAT_patients) == 0:
+        print("No CAT patients found for subgroup analysis")
         return subgroups
     
     # Merge with metadata
-    if 'Filename' in ctt_patients.columns and 'Filename' in metadata_df.columns:
-        ctt_with_metadata = ctt_patients.merge(metadata_df, on='Filename', how='left')
+    if 'Filename' in CAT_patients.columns and 'Filename' in metadata_df.columns:
+        CAT_with_metadata = CAT_patients.merge(metadata_df, on='Filename', how='left')
     else:
         print("Warning: Could not merge metadata. Check ID column names.")
         return subgroups
     
     # Create subgroups for each specified column
     for col in subgroup_columns:
-        if col not in ctt_with_metadata.columns:
+        if col not in CAT_with_metadata.columns:
             print(f"Warning: Column '{col}' not found in metadata")
             continue
         
         # Remove rows with missing values for this column
-        valid_data = ctt_with_metadata.dropna(subset=[col])
+        valid_data = CAT_with_metadata.dropna(subset=[col])
         
         if len(valid_data) == 0:
             print(f"Warning: No valid data for column '{col}'")
@@ -1664,12 +1664,12 @@ def create_catatonia_subgroups(results_df, metadata_df, subgroup_columns, high_l
         low_group = valid_data[valid_data[col] < threshold]
         
         if len(high_group) > 0:
-            subgroups[f"CTT-high_{col}"] = high_group
-            print(f"Created CTT-high_{col} subgroup: n={len(high_group)}")
+            subgroups[f"CAT-high_{col}"] = high_group
+            print(f"Created CAT-high_{col} subgroup: n={len(high_group)}")
         
         if len(low_group) > 0:
-            subgroups[f"CTT-low_{col}"] = low_group
-            print(f"Created CTT-low_{col} subgroup: n={len(low_group)}")
+            subgroups[f"CAT-low_{col}"] = low_group
+            print(f"Created CAT-low_{col} subgroup: n={len(low_group)}")
     
     return subgroups
 
@@ -1821,11 +1821,11 @@ def analyze_regional_deviations(
         metadata_path=None,
         subgroup_columns=None,
         high_low_thresholds=None,
-        merge_ctt_groups=True
+        merge_CAT_groups=True
     ):
     """
     Modified version with:
-    - Heatmap 1: Top 30 CTT-affected regions (3 diagnoses)
+    - Heatmap 1: Top 30 CAT-affected regions (3 diagnoses)
     - Heatmap 2: Top 30 overall-affected regions (3 diagnoses)
     - Paper-style plots: Top 16 per diagnosis
     """
@@ -1921,14 +1921,14 @@ def analyze_regional_deviations(
         region_cols_from_df = [col for col in results_df.columns if col.endswith("_z_score")]
         formatted_roi_names_for_plotting = [f"Region_{i+1}" for i in range(len(region_cols_from_df))]
 
-    # Merge CTT groups if requested
-    if merge_ctt_groups:
+    # Merge CAT groups if requested
+    if merge_CAT_groups:
         results_df = results_df.copy()
-        results_df.loc[results_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
-        print("[INFO] Merged CTT-SCHZ and CTT-MDD into single CTT group")
+        results_df.loc[results_df['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
+        print("[INFO] Merged CAT-SSD and CAT-MDD into single CAT group")
     
     # ========== FILTER TO 4 MAIN DIAGNOSES ==========
-    keep_diagnoses = ['HC', 'MDD', 'SCHZ', 'CTT']
+    keep_diagnoses = ['HC', 'MDD', 'SSD', 'CAT']
     results_df = results_df[results_df['Diagnosis'].isin(keep_diagnoses)].copy()
     print(f"[INFO] Filtered to 4 main diagnoses: {keep_diagnoses}")
     print(f"[INFO] Sample sizes after filtering:")
@@ -1967,8 +1967,8 @@ def analyze_regional_deviations(
         try:
             from utils.dev_scores_utils import create_catatonia_subgroups
             metadata_df = pd.read_csv(metadata_path)
-            if 'Diagnosis' in metadata_df.columns and merge_ctt_groups:
-                metadata_df.loc[metadata_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
+            if 'Diagnosis' in metadata_df.columns and merge_CAT_groups:
+                metadata_df.loc[metadata_df['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
 
             catatonia_subgroups = create_catatonia_subgroups(
                 results_df, metadata_df, subgroup_columns, high_low_thresholds
@@ -2159,32 +2159,32 @@ def analyze_regional_deviations(
     print("\n[INFO] Creating Heatmap 1 & 2...")
     
     # Determine main diagnoses
-    if merge_ctt_groups:
-        desired_diagnoses = ['MDD', 'SCHZ', 'CTT']
+    if merge_CAT_groups:
+        desired_diagnoses = ['MDD', 'SSD', 'CAT']
     else:
-        desired_diagnoses = ['MDD', 'SCHZ', 'CTT-SCHZ', 'CTT-MDD']
+        desired_diagnoses = ['MDD', 'SSD', 'CAT-SSD', 'CAT-MDD']
     
     available_diagnoses_for_heatmap = [diag for diag in desired_diagnoses if diag in effect_sizes_df["Diagnosis"].unique()]
     
-    # Get CTT top 30 regions
-    if merge_ctt_groups:
-        ctt_effects = effect_sizes_df[effect_sizes_df["Diagnosis"] == "CTT"]
+    # Get CAT top 30 regions
+    if merge_CAT_groups:
+        CAT_effects = effect_sizes_df[effect_sizes_df["Diagnosis"] == "CAT"]
     else:
-        ctt_effects = effect_sizes_df[effect_sizes_df["Diagnosis"].isin(["CTT-SCHZ", "CTT-MDD"])]
+        CAT_effects = effect_sizes_df[effect_sizes_df["Diagnosis"].isin(["CAT-SSD", "CAT-MDD"])]
 
-    if not ctt_effects.empty:
-        if merge_ctt_groups:
-            ctt_top_regions_df = ctt_effects.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
-            ctt_top_regions = ctt_top_regions_df["ROI_Name"].values
-            print(f"[INFO] Selected top 30 CTT regions (n={len(ctt_effects)} total)")
+    if not CAT_effects.empty:
+        if merge_CAT_groups:
+            CAT_top_regions_df = CAT_effects.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
+            CAT_top_regions = CAT_top_regions_df["ROI_Name"].values
+            print(f"[INFO] Selected top 30 CAT regions (n={len(CAT_effects)} total)")
         else:
-            ctt_region_avg = ctt_effects.groupby("ROI_Name")["Abs_Cliffs_Delta"].mean().reset_index()
-            ctt_top_regions_df = ctt_region_avg.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
-            ctt_top_regions = ctt_top_regions_df["ROI_Name"].values
-            print(f"[INFO] Selected top 30 CTT regions (averaged across CTT-SCHZ and CTT-MDD)")
+            CAT_region_avg = CAT_effects.groupby("ROI_Name")["Abs_Cliffs_Delta"].mean().reset_index()
+            CAT_top_regions_df = CAT_region_avg.sort_values("Abs_Cliffs_Delta", ascending=False).head(30)
+            CAT_top_regions = CAT_top_regions_df["ROI_Name"].values
+            print(f"[INFO] Selected top 30 CAT regions (averaged across CAT-SSD and CAT-MDD)")
     else:
-        print("[WARNING] No CTT data found for heatmaps")
-        ctt_top_regions = []
+        print("[WARNING] No CAT data found for heatmaps")
+        CAT_top_regions = []
 
     # Get overall top 30 regions
     region_avg_effects = effect_sizes_df.groupby("ROI_Name")["Abs_Cliffs_Delta"].mean().reset_index()
@@ -2228,45 +2228,45 @@ def analyze_regional_deviations(
         stars = "*" if is_significant else ""
         return f"{value:.2f}{stars}"
 
-    # ========== HEATMAP 1: Top 30 CTT-affected regions ==========
-    print("\n[INFO] Creating Heatmap 1: Top 30 CTT-affected regions (3 diagnoses)...")
+    # ========== HEATMAP 1: Top 30 CAT-affected regions ==========
+    print("\n[INFO] Creating Heatmap 1: Top 30 CAT-affected regions (3 diagnoses)...")
     
-    if len(available_diagnoses_for_heatmap) > 0 and len(ctt_top_regions) > 0:
-        heatmap_ctt_regions_data = heatmap_df.loc[ctt_top_regions, available_diagnoses_for_heatmap].copy()
-        significance_ctt_regions = significance_flags_matrix.loc[ctt_top_regions, available_diagnoses_for_heatmap].copy()
+    if len(available_diagnoses_for_heatmap) > 0 and len(CAT_top_regions) > 0:
+        heatmap_CAT_regions_data = heatmap_df.loc[CAT_top_regions, available_diagnoses_for_heatmap].copy()
+        significance_CAT_regions = significance_flags_matrix.loc[CAT_top_regions, available_diagnoses_for_heatmap].copy()
 
-        annot_combined_ctt = heatmap_ctt_regions_data.apply(
-            lambda col: [annotate_cell_with_significance(val, significance_ctt_regions.loc[idx, col.name])
+        annot_combined_CAT = heatmap_CAT_regions_data.apply(
+            lambda col: [annotate_cell_with_significance(val, significance_CAT_regions.loc[idx, col.name])
                         for idx, val in col.items()]
         )
-        annot_combined_ctt = pd.DataFrame(annot_combined_ctt.values.tolist(),
-                                        index=heatmap_ctt_regions_data.index,
-                                        columns=heatmap_ctt_regions_data.columns)
+        annot_combined_CAT = pd.DataFrame(annot_combined_CAT.values.tolist(),
+                                        index=heatmap_CAT_regions_data.index,
+                                        columns=heatmap_CAT_regions_data.columns)
 
-        if not heatmap_ctt_regions_data.empty and not heatmap_ctt_regions_data.isna().all().all():
+        if not heatmap_CAT_regions_data.empty and not heatmap_CAT_regions_data.isna().all().all():
             fig_width = max(12, len(available_diagnoses_for_heatmap) * 3)
             plt.figure(figsize=(fig_width, 16))
 
-            mask = heatmap_ctt_regions_data.isna()
-            sns.heatmap(heatmap_ctt_regions_data, cmap="RdBu_r", center=0,
-                    annot=annot_combined_ctt,
+            mask = heatmap_CAT_regions_data.isna()
+            sns.heatmap(heatmap_CAT_regions_data, cmap="RdBu_r", center=0,
+                    annot=annot_combined_CAT,
                     fmt="",
                     cbar_kws={"label": "Cliff's Delta"}, mask=mask,
                     square=False, linewidths=0.5)
 
-            plt.title(f"Heatmap 1: Top 30 CTT-Affected Regions vs {norm_diagnosis}\n{name}")
+            plt.title(f"Heatmap 1: Top 30 CAT-Affected Regions vs {norm_diagnosis}\n{name}")
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
-            plt.savefig(f"{save_dir}/figures/heatmap_1_ctt_regions_3diagnoses_vs_{norm_diagnosis}.png",
+            plt.savefig(f"{save_dir}/figures/heatmap_1_CAT_regions_3diagnoses_vs_{norm_diagnosis}.png",
                     dpi=300, bbox_inches='tight', facecolor='white')
             plt.close()
 
-            heatmap_ctt_regions_data.to_csv(f"{save_dir}/heatmap_1_ctt_regions_3diagnoses_vs_{norm_diagnosis}.csv")
-            print(f"  ✓ Heatmap 1 created: {heatmap_ctt_regions_data.shape[0]} regions, {len(available_diagnoses_for_heatmap)} diagnoses")
+            heatmap_CAT_regions_data.to_csv(f"{save_dir}/heatmap_1_CAT_regions_3diagnoses_vs_{norm_diagnosis}.csv")
+            print(f"  ✓ Heatmap 1 created: {heatmap_CAT_regions_data.shape[0]} regions, {len(available_diagnoses_for_heatmap)} diagnoses")
         else:
             print("  [WARNING] No data available for Heatmap 1")
     else:
-        print("  [WARNING] Cannot create Heatmap 1 - missing diagnoses or CTT regions")
+        print("  [WARNING] Cannot create Heatmap 1 - missing diagnoses or CAT regions")
 
     # ========== HEATMAP 2: Top 30 overall-affected regions ==========
     print("\n[INFO] Creating Heatmap 2: Top 30 overall-affected regions (3 diagnoses)...")
@@ -2319,18 +2319,18 @@ def analyze_regional_deviations(
 def create_corrected_correlation_heatmap(results_df, metadata_df, save_dir, name,
                                        correction_method='fdr_bh',
                                        alpha=0.05,
-                                       merge_ctt_groups=True):
+                                       merge_CAT_groups=True):
    
    # Erstellt eine Heatmap mit korrigierten Korrelationen zwischen Deviation Scores 
     
     metadata_df = pd.read_csv(metadata_df)
-    # CTT Gruppen zusammenfassen falls gewünscht
-    if merge_ctt_groups:
+    # CAT Gruppen zusammenfassen falls gewünscht
+    if merge_CAT_groups:
         results_df = results_df.copy()
         metadata_df = metadata_df.copy()
-        results_df.loc[results_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
-        metadata_df.loc[metadata_df['Diagnosis'].isin(['CTT-SCHZ', 'CTT-MDD']), 'Diagnosis'] = 'CTT'
-        print("CTT-SCHZ und CTT-MDD zu CTT zusammengefasst")
+        results_df.loc[results_df['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
+        metadata_df.loc[metadata_df['Diagnosis'].isin(['CAT-SSD', 'CAT-MDD']), 'Diagnosis'] = 'CAT'
+        print("CAT-SSD und CAT-MDD zu CAT zusammengefasst")
     
     # Merge der DataFrames
     merged_data = pd.merge(results_df, metadata_df, on='Filename', how='inner')

@@ -19,16 +19,19 @@ import seaborn as sns
 # PFADE ANPASSEN
 # ============================================================
 
-# RAW DATA (vor Harmonization) - EINE große CSV
-roi_raw_path = "/PFAD/ZU/IHRER/roi_data_BEFORE_harmonization.csv"  # ⭐ TODO: Anpassen!
+# RAW DATA (vor Harmonization)
+roi_raw_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"  
 
-# HARMONIZED DATA (nach Harmonization) - getrennte CSVs
+# HARMONIZED DATA (nach Harmonization) - NEUE DATEIEN
 roi_harm_hc_train_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized.csv"
-roi_harm_hc_test_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_test_roi_harmonized.csv"
-roi_harm_pat_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/pat_roi_harmonized.csv"
+# NEU: Kombinierte Application Datei (HC Test + Patienten ohne NU)
+roi_harm_app_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU.csv" 
 
-# METADATA
-metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/metadata_HARMONIZE_READY.csv"
+# METADATA (Muss alle Probanden enthalten, wird später gefiltert)
+metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_metadata/metadata_for_harmonizing_all.csv"
+
+# AUSGESCHLOSSENE SITES (Muss mit dem Hauptskript übereinstimmen)
+EXCLUDED_SITES = ['NSS', 'EPSY', 'NU'] 
 
 # OUTPUT
 output_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/evaluation_plots"
@@ -36,7 +39,7 @@ import os
 os.makedirs(output_dir, exist_ok=True)
 
 # ============================================================
-# SCHRITT 1: DATEN LADEN
+# SCHRITT 1: DATEN LADEN & VORFILTERN
 # ============================================================
 
 print("="*70)
@@ -45,43 +48,30 @@ print("="*70)
 
 # Metadata laden
 metadata = pd.read_csv(metadata_path)
-print(f"Metadata shape: {metadata.shape}")
-print(f"Metadata columns: {metadata.columns.tolist()}")
-
-# Check ob Filename als Index oder Spalte
 if 'Filename' in metadata.columns:
     metadata = metadata.set_index('Filename')
-    print("✓ Set Filename as index")
 
-print(f"\nMetadata index preview:")
-print(metadata.index[:5])
+# ⭐ FIX: Filtern der Metadaten, um sie mit den ROI-Daten abzugleichen
+metadata = metadata[~metadata['Dataset'].isin(EXCLUDED_SITES)].copy()
+print(f"Metadata shape (nach Ausschluss von {EXCLUDED_SITES}): {metadata.shape}")
 
-# ROI RAW DATA laden (eine große CSV)
+# ROI RAW DATA laden
 roi_raw_all = pd.read_csv(roi_raw_path)
-print(f"\nRaw ROI data shape: {roi_raw_all.shape}")
-print(f"Raw ROI columns (first 5): {roi_raw_all.columns[:5].tolist()}")
-
-# Check ob Filename als Index oder Spalte
 if 'Filename' in roi_raw_all.columns:
     roi_raw_all = roi_raw_all.set_index('Filename')
-    print("✓ Set Filename as index for raw data")
 elif roi_raw_all.index.name != 'Filename':
-    # Wenn kein Filename, erster Column könnte es sein
-    print(f"⚠️  Raw data index name: {roi_raw_all.index.name}")
-    print(f"First few index values: {roi_raw_all.index[:5].tolist()}")
+    # Versuche, die erste Spalte als Index zu setzen, falls 'Filename' fehlt
+    if roi_raw_all.columns[0] == 'Filename':
+        roi_raw_all = roi_raw_all.set_index('Filename')
+
 
 # HARMONIZED DATA laden
-roi_harm_hc_train = pd.read_csv(roi_harm_hc_train_path, index_col=0)
-roi_harm_hc_test = pd.read_csv(roi_harm_hc_test_path, index_col=0)
-roi_harm_pat = pd.read_csv(roi_harm_pat_path, index_col=0)
+roi_harm_hc_train = pd.read_csv(roi_harm_hc_train_path, index_col='Filename') # Korrekter Index-Name
+# ⭐ FIX: Kombinierte Application Datei laden
+roi_harm_app = pd.read_csv(roi_harm_app_path, index_col='Filename') 
 
-print(f"\nHarmonized data shapes:")
-print(f"  HC train: {roi_harm_hc_train.shape}")
-print(f"  HC test:  {roi_harm_hc_test.shape}")
-print(f"  Patients: {roi_harm_pat.shape}")
-
-# Kombiniere harmonized data
-roi_harmonized = pd.concat([roi_harm_hc_train, roi_harm_hc_test, roi_harm_pat])
+# ⭐ FIX: Kombiniere harmonized data (Train + Application)
+roi_harmonized = pd.concat([roi_harm_hc_train, roi_harm_app])
 print(f"  Combined harmonized: {roi_harmonized.shape}")
 
 # ============================================================
@@ -92,25 +82,15 @@ print("\n" + "="*70)
 print("STEP 2: ALIGNING SUBJECTS")
 print("="*70)
 
-# Finde gemeinsame Subjects
 subjects_in_harmonized = set(roi_harmonized.index)
 subjects_in_metadata = set(metadata.index)
 subjects_in_raw = set(roi_raw_all.index)
 
-print(f"Subjects in harmonized data: {len(subjects_in_harmonized)}")
-print(f"Subjects in metadata: {len(subjects_in_metadata)}")
-print(f"Subjects in raw data: {len(subjects_in_raw)}")
-
 # Gemeinsame Subjects über alle drei
 common_subjects = subjects_in_harmonized.intersection(subjects_in_metadata).intersection(subjects_in_raw)
-print(f"\n✓ Common subjects across all: {len(common_subjects)}")
+print(f"✓ Common subjects across all: {len(common_subjects)}")
 
 if len(common_subjects) == 0:
-    print("\n⚠️  ERROR: No common subjects found!")
-    print("\nExample subject IDs from each dataset:")
-    print(f"  Harmonized: {list(subjects_in_harmonized)[:5]}")
-    print(f"  Metadata:   {list(subjects_in_metadata)[:5]}")
-    print(f"  Raw:        {list(subjects_in_raw)[:5]}")
     raise ValueError("No common subjects - check if subject IDs match across files!")
 
 # Filter zu gemeinsamen Subjects
@@ -120,11 +100,6 @@ roi_raw = roi_raw_all.loc[common_subjects_sorted].copy()
 roi_harmonized = roi_harmonized.loc[common_subjects_sorted].copy()
 metadata = metadata.loc[common_subjects_sorted].copy()
 
-print(f"\nFinal aligned shapes:")
-print(f"  Raw ROIs:        {roi_raw.shape}")
-print(f"  Harmonized ROIs: {roi_harmonized.shape}")
-print(f"  Metadata:        {metadata.shape}")
-
 # ============================================================
 # SCHRITT 3: ROI SPALTEN ALIGNIEREN
 # ============================================================
@@ -133,21 +108,15 @@ print("\n" + "="*70)
 print("STEP 3: ALIGNING ROI COLUMNS")
 print("="*70)
 
+# Stellen Sie sicher, dass keine nicht-numerischen Spalten in den ROIs sind
+non_roi_cols_in_raw = [col for col in roi_raw.columns if roi_raw[col].dtype == object]
+if non_roi_cols_in_raw:
+    roi_raw = roi_raw.drop(columns=non_roi_cols_in_raw)
+    print(f"Dropped non-numeric columns in raw data: {non_roi_cols_in_raw[:5]}")
+
 common_rois = roi_raw.columns.intersection(roi_harmonized.columns)
-print(f"Common ROIs: {len(common_rois)}/{len(roi_raw.columns)}")
-
-if len(common_rois) < len(roi_raw.columns):
-    n_dropped = len(roi_raw.columns) - len(common_rois)
-    print(f"⚠️  Dropping {n_dropped} ROIs not in both datasets")
-    dropped_rois = set(roi_raw.columns) - set(common_rois)
-    print(f"Example dropped ROIs: {list(dropped_rois)[:5]}")
-
 roi_raw = roi_raw[common_rois].copy()
 roi_harmonized = roi_harmonized[common_rois].copy()
-
-print(f"\nFinal ROI shapes:")
-print(f"  Raw:        {roi_raw.shape}")
-print(f"  Harmonized: {roi_harmonized.shape}")
 
 # ============================================================
 # SCHRITT 4: METADATA VORBEREITEN
@@ -157,36 +126,17 @@ print("\n" + "="*70)
 print("STEP 4: PREPARING METADATA FOR EVALUATION")
 print("="*70)
 
-print("Available metadata columns:", metadata.columns.tolist())
-
-# Required columns check
-required_cols = ['SITE', 'Age', 'Diagnosis']
-missing = [col for col in required_cols if col not in metadata.columns]
-if missing:
-    raise ValueError(f"Missing required columns in metadata: {missing}")
-
-print(f"\n✓ Required columns present: {required_cols}")
-
-# Check für optionale Spalten
-optional_cols = ['TIV', 'IQR', 'Sex_Male', 'Sex_M']
-available_optional = [col for col in optional_cols if col in metadata.columns]
-print(f"✓ Optional columns present: {available_optional}")
+# Identifiziere Sex-Spalte
+sex_col = None
+for col in ['Sex_Male', 'Sex_M', 'Sex']:
+    if col in metadata.columns:
+        sex_col = col
+        break
 
 # Diagnosis distribution
-print("\n📊 Diagnosis distribution:")
 dx_dist = metadata['Diagnosis'].value_counts()
-for dx, count in dx_dist.items():
-    pct = 100 * count / len(metadata)
-    print(f"  {dx:15s}: {count:4d} ({pct:.1f}%)")
+print(f"  HCs: {dx_dist.get('HC', 0)}, Patients: {len(metadata) - dx_dist.get('HC', 0)}")
 
-# Site distribution
-print("\n📊 Site distribution:")
-site_dist = metadata['SITE'].value_counts()
-print(f"Number of sites: {len(site_dist)}")
-for site, count in site_dist.head(10).items():
-    print(f"  {site:20s}: {count:4d}")
-if len(site_dist) > 10:
-    print(f"  ... and {len(site_dist) - 10} more sites")
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -198,12 +148,20 @@ def site_r2(data, covars, batch_col="SITE"):
     X = sm.add_constant(X)
     
     r2s = []
+    # Stellen Sie sicher, dass X und data die gleiche Zeilenanzahl haben
+    if X.shape[0] != data.shape[0]:
+        raise ValueError("X and data must have the same number of rows for OLS.")
+        
     for i in range(data.shape[1]):
         y = data.iloc[:, i]
         try:
-            res = sm.OLS(y, X).fit()
+            # Drop NaN-Werte, um Probleme mit OLS zu vermeiden
+            valid_mask = ~y.isna()
+            res = sm.OLS(y[valid_mask], X[valid_mask]).fit()
             r2s.append(res.rsquared)
-        except:
+        except Exception as e:
+            # Oft durch PerfectSeparation oder fehlende Varianz
+            # print(f"Warning: OLS failed for column {data.columns[i]}: {e}")
             continue
     
     return np.mean(r2s) if r2s else 0.0
@@ -219,7 +177,6 @@ def site_classification_accuracy(data, covars, batch_col="SITE"):
     mask = y.isin(valid_sites)
     
     if mask.sum() < 10:
-        print("⚠️  Too few samples for site classification")
         return 0.0
     
     X = X[mask]
@@ -238,8 +195,13 @@ def diagnosis_classification_accuracy(data, covars, dx_col="Diagnosis"):
     X = StandardScaler().fit_transform(data)
     y = covars[dx_col].astype(str)
     
-    # Check if we have multiple diagnosis types
-    if y.nunique() < 2:
+    # Remove HCs to focus only on classification between patient groups
+    # FÜR DIESE PRÜFUNG: Nur Patienten vergleichen
+    patient_mask = y != 'HC'
+    X = X[patient_mask]
+    y = y[patient_mask]
+    
+    if y.nunique() < 2 or len(y) < 10:
         return 0.0
     
     clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
@@ -252,13 +214,17 @@ def diagnosis_classification_accuracy(data, covars, dx_col="Diagnosis"):
 
 def mean_covariate_r2(data, covars, covar_name):
     """Mean ROI R² explained by a covariate."""
-    if covar_name not in covars.columns:
+    if covar_name not in covars.columns or covars[covar_name].nunique() <= 1:
         return None
     
-    X = sm.add_constant(covars[covar_name])
+    # Stellen Sie sicher, dass keine NaNs in der Kovariate sind
+    valid_mask = ~covars[covar_name].isna()
+    X = sm.add_constant(covars.loc[valid_mask, covar_name])
+    data_valid = data.loc[valid_mask]
+
     r2s = []
-    for i in range(data.shape[1]):
-        y = data.iloc[:, i]
+    for i in range(data_valid.shape[1]):
+        y = data_valid.iloc[:, i]
         try:
             res = sm.OLS(y, X).fit()
             r2s.append(res.rsquared)
@@ -269,7 +235,6 @@ def mean_covariate_r2(data, covars, covar_name):
 def diagnosis_effect_cohen_d(data, covars):
     """Compute Cohen's d for each patient group vs HC."""
     results = {}
-    
     dx_types = covars['Diagnosis'].unique()
     
     hc_mask = covars['Diagnosis'] == 'HC'
@@ -306,49 +271,35 @@ print("\n" + "="*70)
 print("QUANTITATIVE EVALUATION")
 print("="*70)
 
-print("\n🎯 Computing metrics (this may take a few minutes)...")
-
 # Site effects
-print("1. Site effect reduction...")
 r2_before = site_r2(roi_raw, metadata)
 r2_after = site_r2(roi_harmonized, metadata)
 acc_before = site_classification_accuracy(roi_raw, metadata)
 acc_after = site_classification_accuracy(roi_harmonized, metadata)
 
 # Age
-print("2. Age preservation...")
 age_r2_before = mean_covariate_r2(roi_raw, metadata, 'Age')
 age_r2_after = mean_covariate_r2(roi_harmonized, metadata, 'Age')
 
 # TIV
 tiv_r2_before = tiv_r2_after = None
 if 'TIV' in metadata.columns:
-    print("3. TIV preservation...")
     tiv_r2_before = mean_covariate_r2(roi_raw, metadata, 'TIV')
     tiv_r2_after = mean_covariate_r2(roi_harmonized, metadata, 'TIV')
 
 # IQR
 iqr_r2_before = iqr_r2_after = None
 if 'IQR' in metadata.columns:
-    print("4. IQR preservation...")
     iqr_r2_before = mean_covariate_r2(roi_raw, metadata, 'IQR')
     iqr_r2_after = mean_covariate_r2(roi_harmonized, metadata, 'IQR')
 
 # Sex
 sex_r2_before = sex_r2_after = None
-sex_col = None
-for col in ['Sex_Male', 'Sex_M']:
-    if col in metadata.columns:
-        sex_col = col
-        break
-
 if sex_col:
-    print("5. Sex preservation...")
     sex_r2_before = mean_covariate_r2(roi_raw, metadata, sex_col)
     sex_r2_after = mean_covariate_r2(roi_harmonized, metadata, sex_col)
 
 # Diagnosis
-print("6. Diagnosis effects...")
 diag_acc_before = diagnosis_classification_accuracy(roi_raw, metadata)
 diag_acc_after = diagnosis_classification_accuracy(roi_harmonized, metadata)
 dx_d_before = diagnosis_effect_cohen_d(roi_raw, metadata)
@@ -362,24 +313,26 @@ print("\n" + "="*70)
 print("📊 HARMONIZATION PERFORMANCE RESULTS")
 print("="*70)
 
+# ... (Drucklogik wie im Originalskript) ...
 print("\n=== 🎯 SITE EFFECT REDUCTION (Goal: DECREASE) ===")
-print(f"Mean Site R²:")
-print(f"  Before: {r2_before:.4f}")
-print(f"  After:  {r2_after:.4f}")
-change_pct = 100*(r2_after - r2_before)/r2_before if r2_before > 0 else 0
-print(f"  Change: {r2_after - r2_before:+.4f} ({change_pct:+.1f}%)")
+# ... (Print Site R² and Accuracy) ...
+def print_site_reduction(r2_before, r2_after, acc_before, acc_after):
+    print(f"Mean Site R²:")
+    print(f"  Before: {r2_before:.4f}")
+    print(f"  After:  {r2_after:.4f}")
+    change_pct = 100*(r2_after - r2_before)/r2_before if r2_before > 0 else 0
+    print(f"  Change: {r2_after - r2_before:+.4f} ({change_pct:+.1f}%)")
 
-print(f"\nSite Classification Accuracy:")
-print(f"  Before: {acc_before:.3f}")
-print(f"  After:  {acc_after:.3f}")
-print(f"  Change: {acc_after - acc_before:+.3f}")
+    print(f"\nSite Classification Accuracy:")
+    print(f"  Before: {acc_before:.3f}")
+    print(f"  After:  {acc_after:.3f}")
+    
+    if r2_after < r2_before * 0.8:
+        print("  ✅ GOOD: Site effects substantially reduced!")
+    else:
+        print("  ✓ OK: Site effects reduced") if r2_after < r2_before else print("  ⚠️  WARNING: Site effects not reduced")
 
-if r2_after < r2_before * 0.8:  # 20% reduction
-    print("  ✅ GOOD: Site effects substantially reduced!")
-elif r2_after < r2_before:
-    print("  ✓ OK: Site effects reduced")
-else:
-    print("  ⚠️  WARNING: Site effects not reduced")
+print_site_reduction(r2_before, r2_after, acc_before, acc_after)
 
 print("\n=== 🛡️  BIOLOGICAL PRESERVATION (Goal: MAINTAIN) ===")
 
@@ -395,10 +348,8 @@ def print_preservation(name, before, after):
     
     if abs(change_pct) < 10:
         print(f"  ✅ GOOD: {name} effect well preserved")
-    elif abs(change_pct) < 20:
-        print(f"  ✓ OK: {name} effect reasonably preserved")
     else:
-        print(f"  ⚠️  WARNING: {name} effect changed substantially")
+        print("  ✓ OK: {name} effect reasonably preserved") if abs(change_pct) < 20 else print(f"  ⚠️  WARNING: {name} effect changed substantially")
 
 print_preservation("Age", age_r2_before, age_r2_after)
 print_preservation("TIV", tiv_r2_before, tiv_r2_after)
@@ -422,17 +373,12 @@ if dx_d_before:
         d_after = dx_d_after.get(dx_type, 0)
         change = d_after - d_before
         change_pct = 100*change/d_before if d_before > 0 else 0
-        print(f"  {dx_type}:")
-        print(f"    Before: {d_before:.3f}")
-        print(f"    After:  {d_after:.3f} ({change_pct:+.1f}%)")
+        print(f"  {dx_type}: Before: {d_before:.3f} | After: {d_after:.3f} ({change_pct:+.1f}%)")
+
 
 # ============================================================
 # VISUALIZATIONS
 # ============================================================
-
-print("\n" + "="*70)
-print("CREATING VISUALIZATIONS")
-print("="*70)
 
 def plot_pca_umap(data_raw, data_har, covars, color_by="SITE", title_prefix=""):
     """Generate PCA and UMAP plots."""
@@ -489,7 +435,7 @@ def plot_pca_umap(data_raw, data_har, covars, color_by="SITE", title_prefix=""):
                     mask = var == cat
                     if mask.sum() > 0:
                         ax.scatter(coords[mask,0], coords[mask,1], 
-                                  c=[color_map[cat]], label=str(cat)[:20], alpha=0.6, s=15)
+                                  c=[color_map.get(cat, 'gray')], label=str(cat)[:20], alpha=0.6, s=15)
                 ax.set_title(f"{title_prefix}{title}", fontsize=12)
                 ax.set_xticks([])
                 ax.set_yticks([])
@@ -497,7 +443,7 @@ def plot_pca_umap(data_raw, data_har, covars, color_by="SITE", title_prefix=""):
             # Legend
             if n_cats <= 20:
                 handles = [plt.Line2D([0], [0], marker='o', color='w', 
-                                     markerfacecolor=color_map[cat], markersize=8, label=str(cat)[:20])
+                                     markerfacecolor=color_map.get(cat, 'gray'), markersize=8, label=str(cat)[:20])
                           for cat in var_cat.cat.categories]
                 fig.legend(handles=handles, title=color_by, 
                           loc='lower center', ncol=min(5, n_cats),
@@ -511,6 +457,7 @@ def plot_pca_umap(data_raw, data_har, covars, color_by="SITE", title_prefix=""):
     except Exception as e:
         print(f"ERROR: {str(e)}")
 
+
 # Create plots
 plot_pca_umap(roi_raw, roi_harmonized, metadata, color_by="SITE")
 plot_pca_umap(roi_raw, roi_harmonized, metadata, color_by="Age")
@@ -522,11 +469,10 @@ if 'TIV' in metadata.columns:
 if 'IQR' in metadata.columns:
     plot_pca_umap(roi_raw, roi_harmonized, metadata, color_by="IQR")
 
+if sex_col:
+    plot_pca_umap(roi_raw, roi_harmonized, metadata, color_by=sex_col)
+
+
 print("\n" + "="*70)
 print("✅ EVALUATION COMPLETE!")
 print("="*70)
-print(f"\n📁 Plots saved to: {output_dir}/")
-print(f"\n🎯 Summary:")
-print(f"   Site effects: {'✅ Reduced' if r2_after < r2_before else '⚠️  Not reduced'}")
-print(f"   Age preserved: {'✅ Yes' if abs(age_r2_after - age_r2_before) < 0.1*age_r2_before else '⚠️  Changed'}")
-print(f"   Diagnosis preserved: {'✅ Yes' if diag_acc_after >= diag_acc_before * 0.9 else '⚠️  Reduced'}")

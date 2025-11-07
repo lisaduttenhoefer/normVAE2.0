@@ -407,11 +407,11 @@ def main(args):
     # Custom colors for consistent visualization
     custom_colors = {
         "HC": "#125E8A",
-        "SCHZ": "#3E885B",
+        "SSD": "#3E885B",
         "MDD": "#BEDCFE",
-        "CTT": "#2F4B26",
-        "CTT-SCHZ": "#A67DB8",
-        "CTT-MDD": "#160C28"
+        "CAT": "#2F4B26",
+        "CAT-SSD": "#A67DB8",
+        "CAT-MDD": "#160C28"
     }
     
     try:
@@ -540,7 +540,7 @@ def main(args):
         #             atlas_name=atlas_name,
         #             metadata_path=metadata_path,
         #             custom_colors=custom_colors,
-        #             split_ctt=False,
+        #             split_CAT=False,
         #             add_catatonia_subgroups=False
         #         )
                 
@@ -635,7 +635,7 @@ def main(args):
             metadata_path=metadata_path,
             subgroup_columns=None,
             high_low_thresholds=None,
-            merge_ctt_groups=True
+            merge_CAT_groups=True
         )
         
         # Save regional effect sizes
@@ -702,9 +702,9 @@ def main(args):
     
     # NOTE: Paper-style plots (regional effect sizes) are created in 
     # analyze_regional_deviations() and saved as:
-    #   - figures/paper_style_SCHZ_vs_HC.png
+    #   - figures/paper_style_SSD_vs_HC.png
     #   - figures/paper_style_MDD_vs_HC.png
-    #   - figures/paper_style_CTT_vs_HC.png
+    #   - figures/paper_style_CAT_vs_HC.png
     
     # ==================================================================================
     # FINAL SUMMARY
@@ -720,15 +720,15 @@ def main(args):
     log_and_print_test(f"  - regional_effect_sizes_combined.csv")
     log_and_print_test(f"\nPlots:")
     log_and_print_test(f"  Deviation distributions (figures/distributions/):")
-    log_and_print_test(f"    - score_errorbar_ctt_combined.png (Bootstrap)")
-    log_and_print_test(f"    - recon_errorbar_ctt_combined.png (Reconstruction)")
-    log_and_print_test(f"    - kl_errorbar_ctt_combined.png (KL Divergence)")
-    log_and_print_test(f"    - latent_aguila_errorbar_ctt_combined.png (Aguila method)")
-    log_and_print_test(f"    - combined_errorbar_ctt_combined.png (Combined)")
+    log_and_print_test(f"    - score_errorbar_CAT_combined.png (Bootstrap)")
+    log_and_print_test(f"    - recon_errorbar_CAT_combined.png (Reconstruction)")
+    log_and_print_test(f"    - kl_errorbar_CAT_combined.png (KL Divergence)")
+    log_and_print_test(f"    - latent_aguila_errorbar_CAT_combined.png (Aguila method)")
+    log_and_print_test(f"    - combined_errorbar_CAT_combined.png (Combined)")
     log_and_print_test(f"  Regional effect sizes (figures/):")
-    log_and_print_test(f"    - paper_style_SCHZ_vs_HC.png")
+    log_and_print_test(f"    - paper_style_SSD_vs_HC.png")
     log_and_print_test(f"    - paper_style_MDD_vs_HC.png")
-    log_and_print_test(f"    - paper_style_CTT_vs_HC.png")
+    log_and_print_test(f"    - paper_style_CAT_vs_HC.png")
     log_and_print_test(f"  Latent embeddings (figures/latent_embeddings/)")
     log_and_print_test("="*80 + "\n")
     

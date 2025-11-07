@@ -113,21 +113,17 @@ def read_hdf5_to_df(filepath: str) -> pd.DataFrame:
             print(f"[ERROR] Fallback also failed: {e2}")
             raise
 
-#splitting the NORM patients in training and validation subsets
 def train_val_split_annotations(
-    # The annotations dataframe (metadata)that you want to split into a train and validation part
     annotations: pd.DataFrame,
-    # The proportion of the data that should be in the training set (the rest is in the test set)
-    #test set needs NORM too to calculate dev_scores
     train_proportion: float = 0.8,
-    # The diagnoses you want to include in the split, defaults to all
     diagnoses: List[str] = None,
-    # The datasets you want to include in the split, defaults to all
-    #datasets: List[str] = None,
-    # The random seed for reproducibility
     seed: int = 123,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-
+    """
+    Split annotations into train and validation sets.
+    Handles both string ('Male'/'Female') and numeric (0/1) Sex encoding.
+    """
+    
     train = pd.DataFrame()
     valid = pd.DataFrame()
 
@@ -139,29 +135,58 @@ def train_val_split_annotations(
         diagnoses = annotations["Diagnosis"].unique().tolist()
     
     datasets = annotations["Dataset"].unique()
-
-    # For each diagnosis, dataset and sex, take a random sample of the data and split it into train and test
+    
+    # ========== HANDLE SEX ENCODING ==========
+    # Check if Sex is numeric (0/1) or string ('Male'/'Female')
+    sex_values = annotations["Sex"].unique()
+    
+    # Determine sex categories based on data type
+    if annotations["Sex"].dtype in ['float64', 'float32', 'int64', 'int32']:
+        # Numeric encoding: 0 = Female, 1 = Male
+        sex_categories = sorted(annotations["Sex"].unique())
+        print(f"[INFO] Using numeric Sex encoding: {sex_categories}")
+    else:
+        # String encoding
+        sex_categories = ["Female", "Male"]
+        print(f"[INFO] Using string Sex encoding: {sex_categories}")
+    
+    # For each diagnosis, dataset and sex, take a random sample
     for diagnosis in diagnoses:
         for dataset in datasets:
-            for sex in ["Female", "Male"]:
+            for sex in sex_categories:
                 
                 dataset_annotations = annotations[
                     (annotations["Diagnosis"] == diagnosis)
                     & (annotations["Dataset"] == dataset)
                     & (annotations["Sex"] == sex)
                 ]
-                # shuffle the data randomly 
+                
+                if len(dataset_annotations) == 0:
+                    continue  # Skip empty combinations
+                
+                # Shuffle the data randomly 
                 dataset_annotations = dataset_annotations.sample(
                     frac=1, random_state=seed
                 )
-                # split the data
+                
+                # Split the data
                 split = round(len(dataset_annotations) * train_proportion)
 
                 train = pd.concat(
                     [train, dataset_annotations[:split]], ignore_index=True
                 )
-                valid = pd.concat([valid, dataset_annotations[split:]], ignore_index=True)
-
+                valid = pd.concat(
+                    [valid, dataset_annotations[split:]], ignore_index=True
+                )
+    
+    print(f"[INFO] {len(train)} subjects in training set")
+    print(f"[INFO] {len(valid)} subjects in validation set")
+    
+    if len(train) == 0:
+        raise ValueError("[ERROR] Training set is empty after split!")
+    if len(valid) == 0:
+        raise ValueError("[ERROR] Validation set is empty after split!")
+    
     return train, valid
 
 def train_val_split_subjects(
@@ -702,6 +727,284 @@ def load_mri_data_2D_prenormalized(
     
     if not subjects:
         raise ValueError("[ERROR] No subjects matched between metadata and MRI data!")
+    
+    print(f"[INFO] Total subjects processed: {len(subjects)}")
+    print(f"[INFO] Total ROI features per subject: {len(all_roi_names)}")
+    print("[INFO] Data loading complete!")
+    print("="*80)
+    
+    return subjects, data_overview, all_roi_names
+
+#------------load_mri_data for CONDITIONAL VAE ------------
+def load_mri_data_2D_conditional(
+    normalized_csv_path: str,
+    csv_paths: List[str] = None,
+    diagnoses: List[str] = None,
+    covars: List[str] = [],
+    atlas_name: List[str] = None,
+    volume_type = None,
+    valid_volume_types: List[str] = ["Vgm", "Vwm", "Vcsf", "G", "T"],
+) -> Tuple:
+    """
+    Load pre-normalized MRI data and filter to requested subjects.
+    
+    Args:
+        normalized_csv_path: Path to the pre-normalized CSV
+        csv_paths: List of metadata CSV paths (determines train/test split)
+        diagnoses: List of diagnoses to include (None = all)
+        covars: List of covariates for one-hot encoding
+        atlas_name: List of atlas names to include (None or ["all"] = all available atlases)
+        volume_type: Volume type(s) to include (None or "all" = all types, str or list)
+        valid_volume_types: All valid volume type prefixes
+        
+    Returns:
+        subjects: List of subject dictionaries
+        data_overview: DataFrame with metadata
+        roi_names: List of ROI column names
+    """
+    
+    print("="*80)
+    print("[INFO] Loading PRE-NORMALIZED MRI data")
+    print("="*80)
+    
+    # ==================== ATLAS MAPPING ====================
+    atlas_mapping = {
+        "neuromorphometrics": "Neurom",
+        "lpba40": "lpba40",
+        "cobra": "cobra",
+        "suit": "SUIT",
+        "ibsr": "IBSR",
+        "aal3": "AAL3",
+        "schaefer100": "Sch100",
+        "schaefer200": "Sch200",
+        "aparc_dk40": "DK40",
+        "aparc_destrieux": "Destrieux"
+    }
+    
+    all_available_atlases = list(atlas_mapping.keys())
+    
+    # ==================== HANDLE ATLAS SELECTION ====================
+    if atlas_name is None or (isinstance(atlas_name, list) and len(atlas_name) == 1 and atlas_name[0] == "all"):
+        selected_atlases = all_available_atlases
+    elif not isinstance(atlas_name, list):
+        selected_atlases = [atlas_name]
+    else:
+        selected_atlases = atlas_name
+    
+    print(f"[INFO] Selected atlases: {selected_atlases}")
+    
+    # ==================== HANDLE VOLUME TYPE SELECTION ====================
+    if volume_type is None or volume_type == "all":
+        target_volume_types = valid_volume_types
+    elif isinstance(volume_type, str):
+        target_volume_types = [volume_type]
+    elif isinstance(volume_type, list):
+        if len(volume_type) == 1 and volume_type[0] == "all":
+            target_volume_types = valid_volume_types
+        else:
+            target_volume_types = volume_type
+    else:
+        target_volume_types = valid_volume_types
+    
+    print(f"[INFO] Target volume types: {target_volume_types}")
+    
+    # ==================== STEP 1: Load Metadata ====================
+    print(f"[INFO] Loading metadata from: {csv_paths}")
+    
+    csv_paths = [path.strip("[]'\"") for path in csv_paths]
+    
+    data_overview_list = []
+    for csv_path in csv_paths:
+        if not os.path.isfile(csv_path):
+            raise FileNotFoundError(f"[ERROR] CSV file '{csv_path}' not found")
+        df = pd.read_csv(csv_path)
+        data_overview_list.append(df)
+    
+    data_overview = pd.concat(data_overview_list, ignore_index=True)
+    print(f"[INFO] Loaded metadata with {len(data_overview)} subjects")
+    
+    # ==================== STEP 2: Filter by Diagnosis ====================
+    if diagnoses is None:
+        diagnoses = data_overview["Diagnosis"].unique().tolist()
+    
+    data_overview = data_overview[data_overview["Diagnosis"].isin(diagnoses)]
+    data_overview = data_overview.reset_index(drop=True)
+    
+    print(f"[INFO] Filtered to {len(data_overview)} subjects with diagnoses: {diagnoses}")
+    
+    # ==================== STEP 3: Load Pre-Normalized MRI Data ====================
+    print(f"[INFO] Loading pre-normalized MRI data from: {normalized_csv_path}")
+    
+    if not os.path.isfile(normalized_csv_path):
+        raise FileNotFoundError(f"[ERROR] Normalized CSV not found: {normalized_csv_path}")
+    
+    mri_data = pd.read_csv(normalized_csv_path)
+    print(f"[INFO] Loaded MRI data with shape: {mri_data.shape}")
+    
+    # ==================== STEP 4: Identify All ROI Columns ====================
+    # ROI columns are everything except metadata columns
+    metadata_columns = [
+        'Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV',
+        'GM_vol', 'WM_vol', 'CSF_vol', 'WMH_vol',
+        'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
+        'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global'
+    ]
+    all_roi_columns = [col for col in mri_data.columns if col not in metadata_columns]
+    
+    print(f"[INFO] Found {len(all_roi_columns)} total ROI columns in MRI data")
+    
+    # ==================== STEP 5: Filter ROI Columns by Atlas and Volume Type ====================
+    print(f"[INFO] Filtering columns by selected atlases and volume types...")
+    
+    selected_columns = []
+    all_roi_names = []
+    
+    for atlas in selected_atlases:
+        atlas_prefix = atlas_mapping.get(atlas)
+        if atlas_prefix is None:
+            print(f"[WARNING] Unknown atlas: {atlas}, skipping")
+            continue
+        
+        print(f"[INFO] Processing atlas: {atlas} (prefix: {atlas_prefix})")
+        
+        atlas_columns = []
+        
+        for col in all_roi_columns:
+            # Check if column belongs to this atlas
+            if f"_{atlas_prefix}_" in col:
+                # Check if it matches one of the volume types
+                for vt in target_volume_types:
+                    if col.startswith(f"{vt}_"):
+                        atlas_columns.append(col)
+                        break
+        
+        if not atlas_columns:
+            print(f"[WARNING] No columns found for atlas {atlas} with selected volume types")
+            continue
+        
+        print(f"[INFO] Found {len(atlas_columns)} columns for atlas {atlas}")
+        selected_columns.extend(atlas_columns)
+        all_roi_names.extend(atlas_columns)
+    
+    # Remove duplicates while preserving order
+    selected_columns = list(dict.fromkeys(selected_columns))
+    all_roi_names = list(dict.fromkeys(all_roi_names))
+    
+    print(f"[INFO] Selected {len(selected_columns)} feature columns total after filtering")
+    
+    # Count by volume type for information
+    for vt in target_volume_types:
+        vt_cols = [col for col in selected_columns if col.startswith(f'{vt}_')]
+        if vt_cols:
+            print(f"[INFO]   - {vt}: {len(vt_cols)} features")
+    
+    if not selected_columns:
+        raise ValueError(f"[ERROR] No ROI columns found matching atlases {selected_atlases} and volume types {target_volume_types}!")
+    
+    # ==================== STEP 6: Prepare One-Hot Labels ====================
+    covars = [covars] if not isinstance(covars, list) else covars
+    
+    one_hot_labels = {}
+    variables = ["Diagnosis"] + covars
+    
+    for var in variables:
+        if var not in data_overview.columns:
+            raise ValueError(f"[ERROR] Column '{var}' not found in metadata")
+        one_hot_labels[var] = pd.get_dummies(data_overview[var], dtype=float)
+    
+    # ==================== STEP 7: Match Subjects ====================
+    print("[INFO] Matching metadata subjects with MRI data...")
+    
+    # Create filename lookup with multiple variant handling
+    mri_filenames = set(mri_data['Filename'])
+    
+    subjects_dict = {}
+    matched_count = 0
+    unmatched = []
+    
+    for index, row in data_overview.iterrows():
+        filename = row["Filename"]
+        
+        # Clean filename (remove extension)
+        filename_clean = re.sub(r"\.[^.]+$", "", filename)
+        
+        # Try to find match with multiple variants (similar to old function)
+        matched_filename = None
+        
+        # Variant 1: Direct match
+        if filename in mri_filenames:
+            matched_filename = filename
+        # Variant 2: Cleaned filename
+        elif filename_clean in mri_filenames:
+            matched_filename = filename_clean
+        # Variant 3: With 'sub-' prefix
+        elif f"sub-{filename_clean}" in mri_filenames:
+            matched_filename = f"sub-{filename_clean}"
+        # Variant 4: Without 'sub-' prefix
+        elif filename_clean.startswith('sub-') and filename_clean[4:] in mri_filenames:
+            matched_filename = filename_clean[4:]
+        
+        if matched_filename is None:
+            unmatched.append(filename)
+            continue
+        
+        # Extract ROI measurements (already normalized!)
+        # Use explicit float32 conversion for consistency
+        measurements = mri_data[mri_data['Filename'] == matched_filename][selected_columns].values.flatten().astype(np.float32).tolist()
+        
+        # Create subject entry
+        subjects_dict[filename] = {
+            "name": filename,
+            "measurements": measurements,
+            "labels": {var: one_hot_labels[var].iloc[index].to_numpy().tolist() 
+                      for var in variables}
+        }
+        matched_count += 1
+    
+    print(f"[INFO] Successfully matched {matched_count}/{len(data_overview)} subjects")
+    
+    if unmatched:
+        print(f"[WARNING] {len(unmatched)} subjects not found in MRI data")
+        if len(unmatched) <= 10:
+            print(f"[WARNING] Unmatched: {unmatched}")
+        else:
+            print(f"[WARNING] First 10 unmatched: {unmatched[:10]}")
+    
+    # ==================== STEP 8: Filter data_overview to matched subjects ====================
+    # KRITISCH: data_overview muss nur die gematchten Subjects enthalten!
+    matched_filenames = list(subjects_dict.keys())
+    
+    print(f"[INFO] Filtering data_overview from {len(data_overview)} to {len(matched_filenames)} matched subjects")
+    
+    data_overview = data_overview[data_overview['Filename'].isin(matched_filenames)]
+    data_overview = data_overview.reset_index(drop=True)
+    
+    print(f"[INFO] data_overview after filtering: {len(data_overview)} subjects")
+    
+    # ==================== STEP 9: Convert to List and Add Filename ====================
+    subjects = []
+    for filename, subject_data in subjects_dict.items():
+        subject_data['Filename'] = filename  # ← WICHTIG: Füge Filename hinzu!
+        subjects.append(subject_data)
+    
+    if not subjects:
+        raise ValueError("[ERROR] No subjects matched between metadata and MRI data!")
+    
+    # ==================== STEP 10: Verify Alignment ====================
+    # Prüfe ob subjects und data_overview aligned sind
+    subject_filenames = {s['Filename'] for s in subjects}
+    overview_filenames = set(data_overview['Filename'].tolist())
+    
+    if subject_filenames != overview_filenames:
+        missing_in_overview = subject_filenames - overview_filenames
+        missing_in_subjects = overview_filenames - subject_filenames
+        
+        if missing_in_overview:
+            print(f"[WARNING] {len(missing_in_overview)} filenames in subjects but not in data_overview")
+        if missing_in_subjects:
+            print(f"[WARNING] {len(missing_in_subjects)} filenames in data_overview but not in subjects")
+    else:
+        print(f"[INFO] ✓ subjects and data_overview are perfectly aligned!")
     
     print(f"[INFO] Total subjects processed: {len(subjects)}")
     print(f"[INFO] Total ROI features per subject: {len(all_roi_names)}")
