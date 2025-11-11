@@ -66,21 +66,21 @@ class ConditionalDataset(Dataset):
     - IQR: Ordinal (normalized) - kontinuierlicher Wert  
     - Dataset: One-Hot - n_datasets Features
     
-    One-Hot für Dataset macht Sinn, weil:
-    - Keine ordinale Beziehung zwischen Datasets (Dataset A ist nicht "größer" als B)
-    - Model lernt dataset-spezifische Patterns unabhängig
-    - Verhindert false ordinality (Dataset 0 < 1 < 2 macht keinen Sinn)
+    NEW: Age Binning for Contrastive Loss
+    - age_bins: Quantile-based bins (default: 10 bins)
     """
-    def __init__(self, measurements, metadata, dataset_categories=None, fit_scalers=True):
+    def __init__(self, measurements, metadata, dataset_categories=None, fit_scalers=True, n_age_bins=10):
         """
         Args:
             measurements: numpy array [n_samples, n_features]
             metadata: DataFrame mit Spalten ['Age', 'Sex', 'IQR', 'Dataset']
             dataset_categories: Liste der Dataset-Namen (für One-Hot). Falls None, wird automatisch bestimmt
             fit_scalers: Ob neue Scaler gefittet werden sollen (True für Training, False für Val/Test)
+            n_age_bins: Number of age bins for contrastive loss (default: 10)
         """
         self.measurements = measurements
         self.metadata = metadata.reset_index(drop=True)
+        self.n_age_bins = n_age_bins
         
         # Initialize scalers
         if fit_scalers:
@@ -94,15 +94,44 @@ class ConditionalDataset(Dataset):
             self.iqr_normalized = self.iqr_scaler.fit_transform(
                 metadata['IQR'].values.reshape(-1, 1)
             ).flatten()
+            
+            # ========== NEW: Create Age Bins ==========
+            if n_age_bins > 0:
+                age_bins_raw = pd.qcut(metadata['Age'], q=n_age_bins, labels=False, duplicates='drop')
+                self.age_bins = np.array(age_bins_raw, dtype=np.int32)
+                self.age_bin_edges = pd.qcut(metadata['Age'], q=n_age_bins, retbins=True, duplicates='drop')[1]
+                
+                log_and_print(f"\n=== Age Binning for Contrastive Loss ===")
+                log_and_print(f"Number of bins: {n_age_bins}")
+                log_and_print(f"Actual bins created: {len(np.unique(self.age_bins))}")
+                log_and_print(f"Age bin edges: {self.age_bin_edges}")
+                
+                # Log bin distribution
+                unique_bins, counts = np.unique(self.age_bins, return_counts=True)
+                log_and_print(f"Bin distribution:")
+                for bin_id, count in zip(unique_bins, counts):
+                    age_range_min = self.age_bin_edges[bin_id]
+                    age_range_max = self.age_bin_edges[bin_id + 1]
+                    log_and_print(f"  Bin {bin_id}: {count} samples (Age {age_range_min:.1f}-{age_range_max:.1f})")
+            else:
+                self.age_bins = np.zeros(len(metadata), dtype=np.int32)
+                self.age_bin_edges = None
+                log_and_print("Using continuous age (no binning)")
+                
         else:
-            # Scalers werden von außen gesetzt
+            # ========== FIX: Initialize even when fit_scalers=False ==========
+            # Scalers will be set later via set_scalers_and_bins()
             self.age_scaler = None
             self.iqr_scaler = None
-            self.age_normalized = metadata['Age'].values
-            self.iqr_normalized = metadata['IQR'].values
+            
+            # Initialize with raw values (will be overwritten by set_scalers_and_bins)
+            self.age_normalized = metadata['Age'].values.astype(float)  # ← FIX!
+            self.iqr_normalized = metadata['IQR'].values.astype(float)  # ← FIX!
+            
+            self.age_bins = np.zeros(len(metadata), dtype=np.int32)
+            self.age_bin_edges = None
         
         # Sex: Binary encoding (1=Male, 0=Female oder wie in deinen Daten)
-        # Anpassen falls deine Daten andere Labels haben (z.B. 'M'/'F')
         if metadata['Sex'].dtype == 'object':
             self.sex = (metadata['Sex'].str.upper() == 'M').astype(float).values
         else:
@@ -122,6 +151,50 @@ class ConditionalDataset(Dataset):
                 self.dataset_onehot[i, idx] = 1.0
         
         # Combine all conditions: [Age, Sex, IQR, Dataset_1, Dataset_2, ...]
+        self.conditions = np.column_stack([
+            self.age_normalized,
+            self.sex,
+            self.iqr_normalized,
+            self.dataset_onehot
+        ])
+        
+        # Calculate condition_dim
+        self.condition_dim = self.conditions.shape[1]
+        
+        log_and_print(f"Conditional Dataset created:")
+        log_and_print(f"  - Measurements shape: {self.measurements.shape}")
+        log_and_print(f"  - Conditions shape: {self.conditions.shape}")
+        log_and_print(f"  - Condition breakdown: Age(1) + Sex(1) + IQR(1) + Dataset({len(self.dataset_categories)})")
+        log_and_print(f"  - Dataset categories: {self.dataset_categories}")
+        
+    def __len__(self):
+        return len(self.measurements)
+    
+    def __getitem__(self, idx):
+        # Return age bin as label for contrastive loss
+        age_bin_label = self.age_bins[idx] if self.age_bins is not None else 0
+        
+        return (
+            torch.FloatTensor(self.measurements[idx]),
+            torch.FloatTensor(self.conditions[idx]),
+            torch.tensor(age_bin_label, dtype=torch.long),  # ← Age bin as label
+            self.metadata.index[idx] if hasattr(self.metadata, 'index') else f"sample_{idx}"
+        )
+    
+    def set_scalers(self, age_scaler, iqr_scaler):
+        """Set scalers from training dataset for validation/test sets"""
+        self.age_scaler = age_scaler
+        self.iqr_scaler = iqr_scaler
+        
+        # Transform with provided scalers
+        self.age_normalized = age_scaler.transform(
+            self.metadata['Age'].values.reshape(-1, 1)
+        ).flatten()
+        self.iqr_normalized = iqr_scaler.transform(
+            self.metadata['IQR'].values.reshape(-1, 1)
+        ).flatten()
+        
+        # Recreate conditions with normalized values
         self.conditions = np.column_stack([
             self.age_normalized,
             self.sex,
@@ -188,13 +261,13 @@ class ConditionalVAE_2D(nn.Module):
         recon_loss_weight,
         kldiv_loss_weight,
         contr_loss_weight,
-        beta=0.5,
+        beta=0.01,
         contr_temperature=0.1,
         input_dim: int = None, 
         condition_dim: int = None,  # Wird automatisch berechnet: 3 + n_datasets
         hidden_dim_1=100,
         hidden_dim_2=100,
-        latent_dim=20,
+        latent_dim=50,
         learning_rate=1e-3,
         weight_decay=1e-5,
         device=None,
@@ -293,11 +366,6 @@ class ConditionalVAE_2D(nn.Module):
         # Initialize weights
         self.apply(self._init_weights)
         
-        log_and_print(f"Conditional VAE initialized:")
-        log_and_print(f"  - Input dim: {input_dim}")
-        log_and_print(f"  - Condition dim: {condition_dim}")
-        log_and_print(f"  - Latent dim: {latent_dim}")
-        log_and_print(f"  - Beta: {beta}")
     
     def get_kl_weight(self):
         """Linear warmup for KL weight"""
@@ -357,6 +425,7 @@ class ConditionalVAE_2D(nn.Module):
             encoder_input = torch.cat([x, conditions], dim=1)
             encoded = self.encoder(encoder_input)
             mu = self.fc_mu(encoded)
+            logvar = self.fc_var(encoded)
         return mu
     
     def reconstruct(self, x, conditions):
@@ -366,9 +435,21 @@ class ConditionalVAE_2D(nn.Module):
             recon, _, _ = self(x, conditions)
         return recon
     
-    def loss_function(self, recon_x, x, mu, logvar, free_bits=0.5):
+    def loss_function(self, recon_x, x, mu, logvar, z=None, age_bin_labels=None, free_bits=0.5):
         """
-        β-VAE loss with KL warmup and Free Bits
+        β-VAE loss with KL warmup, Free Bits, and optional Contrastive Loss on Age Bins
+        
+        Args:
+            recon_x: Reconstructed output
+            x: Original input
+            mu: Mean of latent distribution
+            logvar: Log variance of latent distribution
+            z: Latent representation (needed for contrastive loss)
+            age_bin_labels: Age bin labels for contrastive loss
+            free_bits: Minimum KL divergence per dimension
+        
+        Returns:
+            total_loss, recon_loss, kldiv_loss, contr_loss
         """
         # Reconstruction loss (MSE per sample)
         recon_loss = F.mse_loss(recon_x, x, reduction="mean")
@@ -386,11 +467,25 @@ class ConditionalVAE_2D(nn.Module):
         current_kl_weight = self.get_kl_weight()
         kldiv_loss = kldiv_loss_raw * current_kl_weight * self.beta
         
-        # Total loss WITH BALANCING
-        # Wichtig: Recon loss muss gewichtet werden!
-        total_loss = self.recon_loss_weight * recon_loss + kldiv_loss
+        # ========== NEW: Contrastive Loss on Age Bins ==========
+        contr_loss = torch.tensor(0.0, device=x.device)
+        if self.contr_loss_weight > 0 and z is not None and age_bin_labels is not None:
+            # Normalize latent vectors (important for contrastive learning)
+            z_normalized = F.normalize(z, p=2, dim=1)
+            
+            # Apply supervised contrastive loss with age bins as labels
+            contr_loss = supervised_contrastive_loss(
+                z_normalized, 
+                age_bin_labels, 
+                temperature=self.contr_temperature
+            )
         
-        return total_loss, recon_loss, kldiv_loss
+        # Total loss with all components
+        total_loss = (self.recon_loss_weight * recon_loss + 
+                    kldiv_loss + 
+                    self.contr_loss_weight * contr_loss)
+        
+        return total_loss, recon_loss, kldiv_loss, contr_loss
     
     def train_one_epoch(self, train_loader: DataLoader, epoch: int) -> Dict[str, float]:
         """Train for one epoch"""
@@ -404,7 +499,7 @@ class ConditionalVAE_2D(nn.Module):
             # Move to device
             batch_measurements = measurements.to(self.device, non_blocking=True)
             batch_conditions = conditions.to(self.device, non_blocking=True)
-            batch_labels = labels.to(self.device, non_blocking=True)
+            batch_labels = labels.to(self.device, non_blocking=True)  # ← Age bin labels
             
             self.optimizer.zero_grad()
             
@@ -412,13 +507,18 @@ class ConditionalVAE_2D(nn.Module):
             with torch.cuda.amp.autocast(enabled=True):
                 recon_data, mu, logvar = self(batch_measurements, batch_conditions)
                 
-                b_total_loss, b_recon_loss, b_kldiv_loss = self.loss_function(
+                # Sample z for contrastive loss
+                z = self.reparameterize(mu, logvar)
+                
+                # ========== UPDATED: Pass z and labels to loss function ==========
+                b_total_loss, b_recon_loss, b_kldiv_loss, b_contr_loss = self.loss_function(
                     recon_x=recon_data,
                     x=batch_measurements,
                     mu=mu,
-                    logvar=logvar
+                    logvar=logvar,
+                    z=z,  # ← NEW
+                    age_bin_labels=batch_labels  # ← NEW
                 )
-                b_contr_loss = torch.tensor(0.0)
             
             # Backward pass
             self.optimizer.zero_grad()
@@ -447,7 +547,7 @@ class ConditionalVAE_2D(nn.Module):
             if batch_idx % 10 == 0:
                 torch.cuda.empty_cache()
             
-            del batch_measurements, batch_conditions, batch_labels, recon_data, mu, logvar
+            del batch_measurements, batch_conditions, batch_labels, recon_data, mu, logvar, z
             del b_total_loss, b_contr_loss, b_recon_loss, b_kldiv_loss
         
         # Calculate epoch metrics
@@ -469,6 +569,67 @@ class ConditionalVAE_2D(nn.Module):
         
         if not self.schedule_on_validation:
             self.scheduler.step(total_loss / len(train_loader))
+            current_lr = self.optimizer.param_groups[0]["lr"]
+            logging.info("Current Learning Rate: %f", current_lr)
+            epoch_metrics["learning_rate"] = current_lr
+        
+        return epoch_metrics
+
+    @torch.no_grad()
+    def validate(self, valid_loader, epoch) -> Dict[str, float]:
+        """Validate the model"""
+        self.current_epoch = epoch
+        current_kl_weight = self.get_kl_weight()
+        
+        self.eval()
+        total_loss, contr_loss, recon_loss, kldiv_loss = 0.0, 0.0, 0.0, 0.0
+        
+        for batch_idx, (measurements, conditions, labels, names) in enumerate(valid_loader):
+            batch_measurements = measurements.to(self.device, non_blocking=True)
+            batch_conditions = conditions.to(self.device, non_blocking=True)
+            batch_labels = labels.to(self.device, non_blocking=True)
+            
+            with torch.cuda.amp.autocast(enabled=True):
+                recon_data, mu, logvar = self(batch_measurements, batch_conditions)
+                
+                # Sample z for contrastive loss
+                z = self.reparameterize(mu, logvar)
+                
+                # ========== UPDATED: Pass z and labels ==========
+                b_total_loss, b_recon_loss, b_kldiv_loss, b_contr_loss = self.loss_function(
+                    recon_x=recon_data,
+                    x=batch_measurements,
+                    mu=mu,
+                    logvar=logvar,
+                    z=z,
+                    age_bin_labels=batch_labels
+                )
+            
+            total_loss += b_total_loss.item()
+            contr_loss += b_contr_loss.item()
+            recon_loss += b_recon_loss.item()
+            kldiv_loss += b_kldiv_loss.item()
+            
+            del batch_measurements, batch_conditions, batch_labels, recon_data, mu, logvar, z
+            del b_total_loss, b_contr_loss, b_recon_loss, b_kldiv_loss
+            
+            if batch_idx % 5 == 0:
+                torch.cuda.empty_cache()
+        
+        epoch_metrics = {
+            "valid_loss": total_loss / len(valid_loader.dataset),
+            "v_contr_loss": contr_loss / len(valid_loader.dataset),
+            "v_recon_loss": recon_loss / len(valid_loader.dataset),
+            "v_kldiv_loss": kldiv_loss / len(valid_loader.dataset),
+            "kl_weight": current_kl_weight,
+            "beta": self.beta,
+        }
+        
+        epoch_props = loss_proportions("valid_loss", epoch_metrics)
+        log_model_metrics(epoch, epoch_props, type="Validation Metrics:")
+        
+        if self.schedule_on_validation:
+            self.scheduler.step(total_loss / len(valid_loader))
             current_lr = self.optimizer.param_groups[0]["lr"]
             logging.info("Current Learning Rate: %f", current_lr)
             epoch_metrics["learning_rate"] = current_lr
@@ -551,6 +712,7 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
         'val_loss': [],
         'recon_loss': [],
         'kl_loss': [],
+        'contr_loss': [],  # ← NEW
         'kl_weight': [],
         'beta': model.beta,
         'best_epoch': 0,
@@ -560,6 +722,8 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
     # Create data loaders
     log_and_print(f"Training with Conditional VAE")
     log_and_print(f"Using β-VAE with β={model.beta:.2f}")
+    if model.contr_loss_weight > 0:
+        log_and_print(f"Using Contrastive Loss with weight={model.contr_loss_weight:.3f}")
     
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False)
@@ -574,14 +738,21 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
         train_loss = 0.0
         train_recon_loss = 0.0
         train_kl_loss = 0.0
+        train_contr_loss = 0.0  # ← NEW
         
-        for batch_idx, (data, conditions, _, _) in enumerate(train_loader):
+        for batch_idx, (data, conditions, age_bin_labels, _) in enumerate(train_loader):  # ← Changed labels to age_bin_labels
             data = data.to(device)
             conditions = conditions.to(device)
+            age_bin_labels = age_bin_labels.to(device)  # ← NEW
             optimizer.zero_grad()
             
             recon_batch, mu, log_var = model(data, conditions)
-            loss, recon_loss, kl_loss = model.loss_function(recon_batch, data, mu, log_var)
+            z = model.reparameterize(mu, log_var)  # ← NEW: Sample z
+            
+            # ← UPDATED: Pass z and age_bin_labels
+            loss, recon_loss, kl_loss, contr_loss = model.loss_function(
+                recon_batch, data, mu, log_var, z=z, age_bin_labels=age_bin_labels
+            )
             
             loss.backward()
             optimizer.step()
@@ -589,38 +760,51 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
             train_loss += loss.item()
             train_recon_loss += recon_loss.item()
             train_kl_loss += kl_loss.item()
+            train_contr_loss += contr_loss.item()  # ← NEW
         
         # Validation
         model.eval()
         val_loss = 0.0
         val_recon_loss = 0.0
         val_kl_loss = 0.0
+        val_contr_loss = 0.0  # ← NEW
         
         with torch.no_grad():
-            for batch_idx, (data, conditions, _, _) in enumerate(valid_loader):
+            for batch_idx, (data, conditions, age_bin_labels, _) in enumerate(valid_loader):  # ← Changed
                 data = data.to(device)
                 conditions = conditions.to(device)
+                age_bin_labels = age_bin_labels.to(device)  # ← NEW
+                
                 recon_batch, mu, log_var = model(data, conditions)
-                loss, recon_loss, kl_loss = model.loss_function(recon_batch, data, mu, log_var)
+                z = model.reparameterize(mu, log_var)  # ← NEW
+                
+                # ← UPDATED
+                loss, recon_loss, kl_loss, contr_loss = model.loss_function(
+                    recon_batch, data, mu, log_var, z=z, age_bin_labels=age_bin_labels
+                )
                 
                 val_loss += loss.item()
                 val_recon_loss += recon_loss.item()
                 val_kl_loss += kl_loss.item()
+                val_contr_loss += contr_loss.item()  # ← NEW
         
         # Normalize
         train_loss /= len(train_loader)
         train_recon_loss /= len(train_loader)
         train_kl_loss /= len(train_loader)
+        train_contr_loss /= len(train_loader)  # ← NEW
         
         val_loss /= len(valid_loader)
         val_recon_loss /= len(valid_loader)
         val_kl_loss /= len(valid_loader)
+        val_contr_loss /= len(valid_loader)  # ← NEW
         
         # Save metrics
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
         history['recon_loss'].append(train_recon_loss)
         history['kl_loss'].append(train_kl_loss)
+        history['contr_loss'].append(train_contr_loss)  # ← NEW
         history['kl_weight'].append(current_kl_weight)
         
         # Save best model
@@ -631,9 +815,13 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
                 best_model_state = model.state_dict().copy()
         
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs-1:
-            log_and_print(f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
-                         f"Val Loss: {val_loss:.4f}, Recon: {train_recon_loss:.4f}, "
-                         f"KL: {train_kl_loss:.4f}, KL_weight: {current_kl_weight:.4f}, β: {model.beta:.2f}")
+            log_msg = (f"Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, "
+                      f"Val Loss: {val_loss:.4f}, Recon: {train_recon_loss:.4f}, "
+                      f"KL: {train_kl_loss:.4f}")
+            if model.contr_loss_weight > 0:
+                log_msg += f", Contr: {train_contr_loss:.4f}"
+            log_msg += f", KL_weight: {current_kl_weight:.4f}, β: {model.beta:.2f}"
+            log_and_print(log_msg)
     
     if save_best and best_model_state is not None:
         model.load_state_dict(best_model_state)
@@ -641,7 +829,6 @@ def train_conditional_model_plots(train_data, valid_data, model, epochs, batch_s
     if return_history:
         return model, history
     return model
-
 
 def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bootstraps, epochs, batch_size, save_dir, save_models=True):
     """
@@ -736,6 +923,7 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
             'final_val_loss': history['val_loss'][-1],
             'final_recon_loss': history['recon_loss'][-1],
             'final_kl_loss': history['kl_loss'][-1],
+            'final_contr_loss': history['contr_loss'][-1],
             'best_epoch': history['best_epoch'],
             'best_val_loss': history['best_val_loss'],
             'beta': history['beta']
@@ -756,9 +944,14 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
     metrics_df.to_csv(os.path.join(save_dir, "models", "bootstrap_metrics.csv"), index=False)
     
     # Create combined loss plots
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(15, 10))  # ← Changed from (12, 8) to (15, 10)
     
-    plt.subplot(2, 2, 1)
+    # Determine if we need 2x2 or 2x3 grid
+    has_contr_loss = bootstrap_models[0].contr_loss_weight > 0
+    n_plots = 5 if has_contr_loss else 4
+    n_cols = 3 if has_contr_loss else 2
+    
+    plt.subplot(2, n_cols, 1)
     for i, history in enumerate(all_losses):
         plt.plot(history['val_loss'], alpha=0.3, color='blue')
     plt.plot([np.mean([h['val_loss'][e] for h in all_losses]) for e in range(epochs)], 
@@ -769,7 +962,7 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(2, 2, 2)
+    plt.subplot(2, n_cols, 2)
     for i, history in enumerate(all_losses):
         plt.plot(history['train_loss'], alpha=0.3, color='green')
     plt.plot([np.mean([h['train_loss'][e] for h in all_losses]) for e in range(epochs)], 
@@ -780,7 +973,7 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(2, 2, 3)
+    plt.subplot(2, n_cols, 3)
     for i, history in enumerate(all_losses):
         plt.plot(history['recon_loss'], alpha=0.3, color='purple')
     plt.plot([np.mean([h['recon_loss'][e] for h in all_losses]) for e in range(epochs)], 
@@ -791,7 +984,7 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
     plt.legend()
     plt.grid(True)
     
-    plt.subplot(2, 2, 4)
+    plt.subplot(2, n_cols, 4)
     for i, history in enumerate(all_losses):
         plt.plot(history['kl_loss'], alpha=0.3, color='orange')
     plt.plot([np.mean([h['kl_loss'][e] for h in all_losses]) for e in range(epochs)], 
@@ -801,6 +994,19 @@ def bootstrap_train_conditional_models_plots(train_data, valid_data, model, n_bo
     plt.ylabel('Loss')
     plt.legend()
     plt.grid(True)
+    
+    # ← NEW: Add contrastive loss plot if used
+    if has_contr_loss:
+        plt.subplot(2, n_cols, 5)
+        for i, history in enumerate(all_losses):
+            plt.plot(history['contr_loss'], alpha=0.3, color='cyan')
+        plt.plot([np.mean([h['contr_loss'][e] for h in all_losses]) for e in range(epochs)], 
+                 linewidth=2, color='red', label='Mean Contrastive Loss')
+        plt.title(f'Contrastive Loss Across Bootstrap Models (weight={model.contr_loss_weight:.3f})')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True)
     
     plt.tight_layout()
     plt.savefig(os.path.join(figures_dir, "bootstrap_losses.png"))
@@ -829,6 +1035,7 @@ def extract_latent_space_conditional(model, data_loader, data_type):
     model.eval()
     latent_spaces = []
     sample_names = []
+    logvars = []
     conditions_list = []
     
     for batch_idx, (measurements, conditions, labels, names) in enumerate(data_loader):
@@ -836,10 +1043,11 @@ def extract_latent_space_conditional(model, data_loader, data_type):
         batch_conditions = conditions.to(model.device, non_blocking=True)
         
         # Get latent representations
-        mu = model.to_latent(batch_measurements, batch_conditions)
+        mu, logvar = model.to_latent(batch_measurements, batch_conditions)
         
         # Move to CPU
         latent_spaces.append(mu.cpu().numpy())
+        logvars.append(logvar.cpu().numpy())
         conditions_list.append(conditions.cpu().numpy())
         sample_names.extend(names)
         
@@ -855,6 +1063,8 @@ def extract_latent_space_conditional(model, data_loader, data_type):
     
     # Add conditions as observations
     conditions_array = np.concatenate(conditions_list)
+
+    adata.uns['logvar_array'] = np.concatenate(logvars)
     
     # Decompose conditions back to original features
     # Assuming order: [Age, Sex, IQR, Dataset_1, Dataset_2, ...]
@@ -875,39 +1085,36 @@ def extract_latent_space_conditional(model, data_loader, data_type):
 # ============================================================================
 def create_conditional_datasets(train_measurements, train_metadata, 
                                 valid_measurements, valid_metadata,
-                                test_measurements=None, test_metadata=None):
+                                test_measurements=None, test_metadata=None,
+                                n_age_bins=10):
     """
-    Create ConditionalDatasets with proper scaler handling
-    
-    Args:
-        train_measurements: numpy array [n_train, n_features]
-        train_metadata: DataFrame with ['Age', 'Sex', 'IQR', 'Dataset']
-        valid_measurements: numpy array [n_valid, n_features]
-        valid_metadata: DataFrame with ['Age', 'Sex', 'IQR', 'Dataset']
-        test_measurements: Optional numpy array [n_test, n_features]
-        test_metadata: Optional DataFrame
-    
-    Returns:
-        train_dataset, valid_dataset, (optional) test_dataset
+    Create ConditionalDatasets with proper scaler handling and age binning
     """
     
-    # Create training dataset (fits scalers)
+    # Create training dataset (fits scalers and creates age bins)
     train_dataset = ConditionalDataset(
         measurements=train_measurements,
         metadata=train_metadata,
-        fit_scalers=True
+        fit_scalers=True,
+        n_age_bins=n_age_bins
     )
     
     log_and_print(f"Training dataset created with {len(train_dataset)} samples")
     
-    # Create validation dataset (uses training scalers)
+    # Create validation dataset (uses training scalers and bins)
     valid_dataset = ConditionalDataset(
         measurements=valid_measurements,
         metadata=valid_metadata,
         dataset_categories=train_dataset.dataset_categories,
-        fit_scalers=False
+        fit_scalers=False,
+        n_age_bins=n_age_bins
     )
-    valid_dataset.set_scalers(train_dataset.age_scaler, train_dataset.iqr_scaler)
+    
+    # ← FIX: Use set_scalers instead of set_scalers_and_bins
+    valid_dataset.set_scalers(
+        train_dataset.age_scaler, 
+        train_dataset.iqr_scaler
+    )
     
     log_and_print(f"Validation dataset created with {len(valid_dataset)} samples")
     
@@ -916,9 +1123,13 @@ def create_conditional_datasets(train_measurements, train_metadata,
             measurements=test_measurements,
             metadata=test_metadata,
             dataset_categories=train_dataset.dataset_categories,
-            fit_scalers=False
+            fit_scalers=False,
+            n_age_bins=n_age_bins
         )
-        test_dataset.set_scalers(train_dataset.age_scaler, train_dataset.iqr_scaler)
+        test_dataset.set_scalers(
+            train_dataset.age_scaler, 
+            train_dataset.iqr_scaler
+        )
         
         log_and_print(f"Test dataset created with {len(test_dataset)} samples")
         return train_dataset, valid_dataset, test_dataset

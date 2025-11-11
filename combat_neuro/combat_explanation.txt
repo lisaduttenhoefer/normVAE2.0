@@ -1,0 +1,68 @@
+Module importieren: Notwendige Bibliotheken (wie neuroHarmonize für die Harmonisierung, pandas für Datenverarbeitung, numpy für numerische Operationen und joblib zum Speichern des Modells) werden geladen.
+
+Pfade definieren: Die Dateipfade zu den Metadaten für gesunde Kontrollpersonen (HC_METADATA), Patienten (PAT_METADATA) und den eigentlichen MRI-Daten (MRI_DATA) werden festgelegt. Ein OUTPUT_DIR zum Speichern der Ergebnisse wird erstellt.
+
+Ausschluss-Liste definieren: Die Variable EXCLUDE_DATASETS = ['NSS', 'EPSY', 'NU'] wird festgelegt. Datensätze aus dieser Liste werden im Verlauf des Skripts entfernt.
+
+1. Daten laden (SCHRITT 1)
+Die Metadaten (hc_covars, pat_covars) und die gesamten MRI-Ergebnisdaten (all_mri_data) werden als Pandas DataFrames aus den definierten CSV-Dateien geladen.
+
+2. Datensätze ausschließen (SCHRITT 2)
+Die Metadaten der HCs und Patienten werden gefiltert, um alle Datensätze zu entfernen, deren Dataset-Spalte in der EXCLUDE_DATASETS-Liste (NSS, EPSY, NU) enthalten ist. Dies stellt sicher, dass diese Daten nicht für Training oder Anwendung verwendet werden.
+
+3. MRI-Daten vorbereiten (SCHRITT 3)
+Filterung: Anhand der in Schritt 2 verbleibenden Dateinamen (hc_filenames, pat_filenames) werden die entsprechenden Zeilen aus den gesamten MRI-Daten extrahiert, um separate DataFrames für HCs (hc_mri) und Patienten (pat_mri) zu erstellen.
+
+Sortierung: Die Daten- und Kovariaten-DataFrames werden nach dem Filename sortiert. Dies ist extrem wichtig, um sicherzustellen, dass die Zeilen in den Kovariaten- und ROI-DataFrames exakt übereinstimmen.
+
+ROI-Auswahl: Es werden alle Spalten identifiziert, die die eigentlichen ROI-Messungen enthalten (roi_columns), indem vordefinierte nicht-ROI-Spalten (wie Filename, TIV, Age etc.) ausgeschlossen werden. Die finalen ROI-DataFrames (hc_roi, pat_roi) werden erstellt.
+
+Spaltenabgleich: Es wird sichergestellt, dass die HC- und Patienten-ROI-DataFrames die exakt gleichen ROI-Spalten haben.
+
+4. Kovariaten vorbereiten (SCHRITT 4)
+Auswahl der Kovariaten: Die für die Harmonisierung benötigten Kovariaten werden festgelegt: Age, TIV (Total Intracranial Volume) und SITE (Standort/Scanner). Die Kovariate IQR (Interquartile Range) wurde bewusst entfernt (ÄNDERUNG).
+
+Geschlecht-Spalte: Es wird automatisch geprüft, welche der möglichen Geschlecht-Spalten (Sex_Male, Sex_M etc.) existiert, und diese wird zu den erforderlichen Kovariaten hinzugefügt.
+
+Die finalen Kovariaten-DataFrames für HCs (hc_covars_harm) und Patienten (pat_covars_harm) werden erstellt.
+
+5. Train/Test-Split (SCHRITT 7)
+Hinweis: Die Schritte 5 und 6 fehlen im bereitgestellten Code und sind daher hier übersprungen, wobei die Nummerierung des Codes beibehalten wird.
+
+Aufteilung: Die HC-Daten werden in ein Trainingsset (80%) und ein Testset (20%) aufgeteilt.
+
+Stratifizierung: Die Aufteilung erfolgt stratifiziert nach der Kovariate SITE, was bedeutet, dass das Verhältnis der Standorte im Trainings- und Testset gleich bleibt.
+
+Subsets erstellen: Es werden vier Subsets erstellt: hc_roi_train, hc_covars_train, hc_roi_test und hc_covars_test. Die Dateinamen dieser Subsets werden ebenfalls gespeichert.
+
+Kombinierte Anwendungsdaten (app): Das HC-Testset und die gesamten Patientendaten werden kombiniert (app_roi, app_covars) – dies ist das Set, auf das die gelernte Harmonisierung später angewendet wird.
+
+6. Neuordnung & Clamping (SCHRITT 8/9)
+Clamping (Begrenzung): Um Probleme während der Harmonisierung zu vermeiden, werden die Age-Werte im kombinierten Anwendungsset (app_covars) auf den minimalen und maximalen Age-Wert des HC-Trainingssets begrenzt.
+
+Neuordnung: Die Spalten der Kovariaten-DataFrames werden neu geordnet, sodass SITE immer die erste Spalte ist, gefolgt von den anderen Kovariaten (Age, TIV, Sex).
+
+Varianz-Check: Es wird überprüft, ob ROIs im HC-Trainingsset eine Varianz nahe Null haben. Solche Spalten werden aus dem Trainings- und Anwendungsset entfernt, da sie numerische Probleme in neuroHarmonize verursachen können.
+
+Konvertierung: Die finalen ROI-Daten (hc_roi_train und app_roi) werden in NumPy-Arrays konvertiert, da neuroHarmonize dieses Format benötigt.
+
+7. Harmonisierungsmodell lernen (SCHRITT 10)
+Modelltraining: Die Funktion harmonizationLearn wird mit den HC-Trainingsdaten (hc_roi_train_np und hc_covars_train) aufgerufen.
+
+Modelltyp: Durch smooth_terms=[] wird ein lineares Modell verwendet, um die Standorteffekte basierend auf den Kovariaten zu schätzen.
+
+Das gelernte Modell (model_smoothage) und das bereits harmonisierte Trainingsset (data_adj_train) werden zurückgegeben.
+
+Speichern: Das gelernte Modell wird mit joblib im OUTPUT_DIR gespeichert, um später für neue Daten verwendet werden zu können.
+
+8. Harmonisierung anwenden (SCHRITT 11)
+Anwendung: Das in Schritt 10 gelernte Modell (model_smoothage) wird auf das kombinierte Anwendungsset (app_roi_np und app_covars) angewendet.
+
+Das Ergebnis ist das harmonisierte Anwendungsset (data_adj_app), welches die korrigierten Daten sowohl für die HC-Testpersonen als auch für alle Patienten enthält.
+
+9. Daten speichern (SCHRITT 12/13)
+Speichern der harmonisierten Daten: Die harmonisierten Trainings- und Anwendungs-Daten (data_adj_train, data_adj_app) werden wieder in Pandas DataFrames umgewandelt.
+
+IDs sichern: Die Filenames werden als Index (index_label="Filename") verwendet, um die Zuordnung der korrigierten Werte zu den einzelnen Probanden sicherzustellen.
+
+Split-Info: Eine zusätzliche Datei (app_split_info_noNU.csv) wird gespeichert, die angibt, ob ein Proband im Anwendungsset ein HC-Testproband (test) oder ein Patient (patient) war.

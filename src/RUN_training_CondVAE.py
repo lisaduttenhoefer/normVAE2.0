@@ -75,18 +75,20 @@ def create_arg_parser():
     parser.add_argument('--num_epochs', help='Number of epochs to be trained for', type=int, default=250)
     parser.add_argument('--n_bootstraps', help='Number of bootstrap samples', type=int, default=80)
     parser.add_argument('--kl_warmup_epochs', type=int, default=50, help='Number of epochs for KL warmup')
-    parser.add_argument('--beta', type=float, default=0.5)
+    parser.add_argument('--beta', type=float, default=0.01)
     parser.add_argument('--dropout', type=float, default=0.05)
     parser.add_argument('--norm_diagnosis', help='which diagnosis is considered the "norm"', type=str, default="HC")
     parser.add_argument('--train_ratio', help='Normpslit ratio', type=float, default=0.7)
     parser.add_argument('--batch_size', help='Batch size', type=int, default=32)
     parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.000559)
-    parser.add_argument('--latent_dim', help='Dimension of latent space', type=int, default=20) 
-    parser.add_argument('--kldiv_weight', help='Weight for KL divergence loss', type=float, default=0.15)
+    parser.add_argument('--latent_dim', help='Dimension of latent space', type=int, default=50) 
+    parser.add_argument('--kldiv_weight', help='Weight for KL divergence loss', type=float, default=1.0)
     parser.add_argument('--save_models', help='Save all bootstrap models', action='store_true', default=True)
     parser.add_argument('--no_cuda', help='Disable CUDA (use CPU only)', action='store_true')
     parser.add_argument('--seed', help='Random seed for reproducibility', type=int, default=42)
     parser.add_argument('--output_dir', help='Override default output directory', default=None)
+    parser.add_argument('--contr_loss_weight', type=float, default=0.1, help='Weight for contrastive loss on age bins')
+    parser.add_argument('--n_age_bins', type=int, default=0,help='Number of age bins for contrastive loss')
     # ========== NEW PARAMETER ==========
     parser.add_argument(
         '--normalization_method',
@@ -100,7 +102,7 @@ def create_arg_parser():
 
 def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm_diagnosis: str, train_ratio: float, 
          batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, kl_warmup_epochs: int, beta: int, dropout: int,
-         no_cuda: bool, seed: int, normalization_method: str = 'rowwise', output_dir: str = None):
+         no_cuda: bool, seed: int, contr_loss_weight: int, n_age_bins: int, normalization_method: str = 'rowwise', output_dir: str = None):
     ## 0. Set Up ----------------------------------------------------------
     # Set main paths
     path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
@@ -144,7 +146,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         PRETRAIN_METRICS_PATH=None,
         CONTINUE_FROM_EPOCH=0,
         # Loss Parameters
-        RECON_LOSS_WEIGHT=16,
+        RECON_LOSS_WEIGHT=1.0,
         KLDIV_LOSS_WEIGHT=kldiv_weight, 
         CONTR_LOSS_WEIGHT=0.0,
         # Learning and Regularization
@@ -202,7 +204,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_and_print("Loading NORM control data...")
     
     # ========== MODIFIED: Pass normalization_method parameter ==========
-    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC_separate_TRAIN.csv"
+    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_IQR_HC_separate_TRAIN.csv"
 
     subjects_train, train_overview, roi_names_train = load_mri_data_2D_conditional(
         normalized_csv_path=NORMALIZED_CSV,
@@ -334,13 +336,41 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         train_measurements=train_measurements,
         train_metadata=train_annotations_norm,
         valid_measurements=valid_measurements,
-        valid_metadata=valid_annotations_norm
+        valid_metadata=valid_annotations_norm,
+        n_age_bins=n_age_bins
     )
 
     log_and_print(f"Conditional datasets created:")
     log_and_print(f"  Train: {len(train_dataset)} samples")
     log_and_print(f"  Valid: {len(valid_dataset)} samples")
     log_and_print(f"  Condition dim: {train_dataset.condition_dim}")
+
+    # ========== ADD THIS VERIFICATION ==========
+    log_and_print(f"\n=== CVAE Configuration ===")
+    log_and_print(f"Condition dim: {train_dataset.condition_dim}")
+    log_and_print(f"  - Age (normalized): 1")
+    log_and_print(f"  - Sex (binary): 1")
+    log_and_print(f"  - IQR (normalized): 1")
+    log_and_print(f"  - Dataset (one-hot): {len(train_dataset.dataset_categories)}")
+    log_and_print(f"Total condition dim: {train_dataset.condition_dim}")
+    log_and_print(f"\nContrastive Loss:")
+    log_and_print(f"  - Age bins: {len(np.unique(train_dataset.age_bins))}")
+    log_and_print(f"  - Contrastive weight: {contr_loss_weight}")
+
+    # Sample a batch to verify
+    sample_loader = DataLoader(train_dataset, batch_size=4, shuffle=False)
+    measurements, conditions, age_bins, names = next(iter(sample_loader))
+    log_and_print(f"\n=== Sample Batch ===")
+    log_and_print(f"Measurements shape: {measurements.shape}")
+    log_and_print(f"Conditions shape: {conditions.shape}")
+    log_and_print(f"Age bins: {age_bins.numpy()}")
+    log_and_print(f"Condition example (first sample):")
+    log_and_print(f"  Age (norm): {conditions[0, 0]:.3f}")
+    log_and_print(f"  Sex: {conditions[0, 1]:.0f}")
+    log_and_print(f"  IQR (norm): {conditions[0, 2]:.3f}")
+    log_and_print(f"  Dataset one-hot: {conditions[0, 3:].numpy()}")
+    log_and_print("="*80)
+
 
     # Save processed data tensors for future use
     torch.save(train_measurements, f"{save_dir}/data/train_data_tensor.pt")
@@ -356,11 +386,11 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         learning_rate=learning_rate,
         kldiv_loss_weight=kldiv_weight,
         recon_loss_weight=config.RECON_LOSS_WEIGHT,
-        contr_loss_weight=config.CONTR_LOSS_WEIGHT,
+        contr_loss_weight=contr_loss_weight,
         kl_warmup_epochs=kl_warmup_epochs,
         dropout_prob=dropout,
         beta=beta,  # ← NEU für β-VAE
-        device=device
+        device=device,
     )
     
     log_model_ready(normative_model)
@@ -396,62 +426,89 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
 
     # Calculate and visualize overall performance
     metrics_df = pd.DataFrame(bootstrap_metrics)
-    
-    # ========== POST-TRAINING ANALYSIS (HIER EINFÜGEN!) ==========
+    # ========== POST-TRAINING ANALYSIS ==========
     log_and_print("\n" + "="*80)
-    log_and_print("POST-TRAINING ANALYSIS")
+    log_and_print("POST-TRAINING ANALYSIS: LATENT SPACE EVALUATION")
     log_and_print("="*80)
 
     import umap
     from sklearn.metrics import silhouette_score
+    from sklearn.decomposition import PCA
 
-    # Extract latents
+    # Extract latents + metadata
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
 
     all_latents = []
     all_conditions = []
+    all_diagnoses = []  # ← NEU!
+    all_filenames = []  # ← NEU! für Zuordnung
 
     baseline_model.eval()
     with torch.no_grad():
-        for measurements, conditions, _, _ in train_loader:
+        for measurements, conditions, _, filenames in train_loader:
             measurements = measurements.to(device)
             conditions = conditions.to(device)
             latent = baseline_model.to_latent(measurements, conditions)
             all_latents.append(latent.cpu().numpy())
             all_conditions.append(conditions.cpu().numpy())
+            all_filenames.extend(filenames)
 
     latents = np.concatenate(all_latents)
     conditions = np.concatenate(all_conditions)
 
+    # ========== DIAGNOSE MAPPING ==========
+    # Alternative: Direkt über Index zuordnen (wenn Reihenfolge garantiert ist) AUFPASSEN
+    diagnoses = train_annotations_norm['Diagnosis'].values
+
+    log_and_print(f"\nDiagnosis distribution in training data:")
+    unique_diagnoses, counts = np.unique(diagnoses, return_counts=True)
+    for diag, count in zip(unique_diagnoses, counts):
+        log_and_print(f"  {diag}: {count}")
+
     # Decompose conditions
-    ages = conditions[:, 0]
+    ages_normalized = conditions[:, 0]
     sexes = conditions[:, 1]
-    iqrs = conditions[:, 2]
+    iqrs_normalized = conditions[:, 2]
     dataset_onehot = conditions[:, 3:]
     dataset_idx = np.argmax(dataset_onehot, axis=1)
 
-    # UMAP
-    log_and_print("Computing UMAP...")
-    reducer = umap.UMAP(n_neighbors=30, min_dist=0.3, random_state=42)
-    embedding = reducer.fit_transform(latents)
+    # ========== GET REAL AGE VALUES ==========
+    # Map back from normalized to original ages using the scaler
+    ages_real = train_dataset.age_scaler.inverse_transform(
+        ages_normalized.reshape(-1, 1)
+    ).flatten()
 
-    # Silhouette Score (HAUPTMETRIK!)
-    silhouette = silhouette_score(latents, dataset_idx)
-    log_and_print(f"\n=== DATASET MIXING SCORE ===")
-    log_and_print(f"Silhouette Score: {silhouette:.3f}")
+    iqrs_real = train_dataset.iqr_scaler.inverse_transform(
+        iqrs_normalized.reshape(-1, 1)
+    ).flatten()
 
-    if silhouette < 0.2:
+    log_and_print(f"\n=== Age Statistics (Real Values) ===")
+    log_and_print(f"Age range: {ages_real.min():.1f} - {ages_real.max():.1f}")
+    log_and_print(f"Age mean: {ages_real.mean():.1f}")
+
+    # Compute UMAP for LATENT space
+    log_and_print("Computing UMAP for LATENT space...")
+    reducer_latent = umap.UMAP(n_neighbors=30, min_dist=0.3, random_state=42)
+    embedding_latent = reducer_latent.fit_transform(latents)
+
+    # Silhouette Scores
+    silhouette_dataset = silhouette_score(latents, dataset_idx)
+
+    log_and_print(f"\n=== LATENT SPACE QUALITY METRICS ===")
+    log_and_print(f"Silhouette Score (Dataset separation): {silhouette_dataset:.3f}")
+
+    if silhouette_dataset < 0.2:
         log_and_print("✓ EXCELLENT! Datasets well mixed (site effects removed)")
-    elif silhouette < 0.4:
+    elif silhouette_dataset < 0.4:
         log_and_print("✓ GOOD! Datasets moderately mixed")
     else:
         log_and_print("⚠️  WARNING! Datasets still separated (site effects remain)")
 
-    # Correlation with conditions
+    # Correlation with conditions (USE NORMALIZED VALUES FOR LATENT CORRELATION!)
     log_and_print(f"\n=== CONDITION CORRELATION ===")
-    max_age_corr = max([abs(np.corrcoef(latents[:, i], ages)[0, 1]) for i in range(latents.shape[1])])
+    max_age_corr = max([abs(np.corrcoef(latents[:, i], ages_normalized)[0, 1]) for i in range(latents.shape[1])])  # ← FIXED
     max_sex_corr = max([abs(np.corrcoef(latents[:, i], sexes)[0, 1]) for i in range(latents.shape[1])])
-    max_iqr_corr = max([abs(np.corrcoef(latents[:, i], iqrs)[0, 1]) for i in range(latents.shape[1])])
+    max_iqr_corr = max([abs(np.corrcoef(latents[:, i], iqrs_normalized)[0, 1]) for i in range(latents.shape[1])])  # ← FIXED
 
     log_and_print(f"Max Age correlation: {max_age_corr:.3f}")
     log_and_print(f"Max Sex correlation: {max_sex_corr:.3f}")
@@ -462,65 +519,122 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     else:
         log_and_print("⚠️  Some conditions still in latent space")
 
-    # Create UMAP plot
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    # ========== CHECK AGE TRAJECTORY IN UMAP ==========
+    log_and_print(f"\n=== Age Trajectory Analysis ===")
 
-    # Age
-    scatter = axes[0, 0].scatter(embedding[:, 0], embedding[:, 1],
-                                 c=ages, cmap='viridis', s=10, alpha=0.6)
-    axes[0, 0].set_title('UMAP by Age (normalized)', fontsize=12)
-    axes[0, 0].set_xlabel('UMAP 1')
-    axes[0, 0].set_ylabel('UMAP 2')
-    plt.colorbar(scatter, ax=axes[0, 0], label='Age')
+    # Compute correlation between UMAP coordinates and REAL age
+    umap1_age_corr = np.corrcoef(embedding_latent[:, 0], ages_real)[0, 1]
+    umap2_age_corr = np.corrcoef(embedding_latent[:, 1], ages_real)[0, 1]
 
-    # Sex
-    sex_colors = ['#FF6B6B' if s == 0 else '#4ECDC4' for s in sexes]
-    axes[0, 1].scatter(embedding[:, 0], embedding[:, 1],
-                       c=sex_colors, s=10, alpha=0.6)
-    axes[0, 1].set_title('UMAP by Sex', fontsize=12)
-    axes[0, 1].set_xlabel('UMAP 1')
-    axes[0, 1].set_ylabel('UMAP 2')
-    from matplotlib.patches import Patch
-    axes[0, 1].legend(handles=[
-        Patch(facecolor='#FF6B6B', label='Female'),
-        Patch(facecolor='#4ECDC4', label='Male')
-    ])
+    log_and_print(f"UMAP1 vs Age correlation: {umap1_age_corr:.3f}")
+    log_and_print(f"UMAP2 vs Age correlation: {umap2_age_corr:.3f}")
 
-    # IQR
-    scatter = axes[1, 0].scatter(embedding[:, 0], embedding[:, 1],
-                                 c=iqrs, cmap='plasma', s=10, alpha=0.6)
-    axes[1, 0].set_title('UMAP by IQR (normalized)', fontsize=12)
-    axes[1, 0].set_xlabel('UMAP 1')
-    axes[1, 0].set_ylabel('UMAP 2')
-    plt.colorbar(scatter, ax=axes[1, 0], label='IQR')
+    max_umap_age_corr = max(abs(umap1_age_corr), abs(umap2_age_corr))
 
-    # Dataset (WICHTIGSTER PLOT!)
+    if max_umap_age_corr > 0.5:
+        log_and_print("✓ EXCELLENT! Strong age trajectory visible in UMAP")
+    elif max_umap_age_corr > 0.3:
+        log_and_print("✓ GOOD! Moderate age trajectory visible")
+    else:
+        log_and_print("⚠️  WARNING! Weak age structure - increase contrastive loss weight")
+
+    # Split by age groups and check separation
+    young = ages_real < 25
+    middle = (ages_real >= 25) & (ages_real < 60)
+    old = ages_real >= 60
+
+    log_and_print(f"\nAge group centroids in UMAP space:")
+    log_and_print(f"  Young (<25): n={young.sum()}, UMAP1={embedding_latent[young, 0].mean():.2f}, UMAP2={embedding_latent[young, 1].mean():.2f}")
+    log_and_print(f"  Middle (25-60): n={middle.sum()}, UMAP1={embedding_latent[middle, 0].mean():.2f}, UMAP2={embedding_latent[middle, 1].mean():.2f}")
+    log_and_print(f"  Old (>60): n={old.sum()}, UMAP1={embedding_latent[old, 0].mean():.2f}, UMAP2={embedding_latent[old, 1].mean():.2f}")
+
+    # ========== UPDATED PLOT: 2x3 MIT DIAGNOSE ==========
+    fig, axes = plt.subplots(2, 3, figsize=(20, 12))
+
+    # Farben für Datasets
     n_datasets = len(train_dataset.dataset_categories)
     colors_map = plt.cm.tab10(np.linspace(0, 1, n_datasets))
     dataset_colors = [colors_map[idx] for idx in dataset_idx]
 
-    axes[1, 1].scatter(embedding[:, 0], embedding[:, 1],
-                       c=dataset_colors, s=10, alpha=0.6)
-    axes[1, 1].set_title(f'UMAP by Dataset (Silhouette: {silhouette:.2f})', fontsize=12)
+    # Farben für Diagnosen
+    diagnosis_categories = sorted(np.unique(diagnoses))
+    diagnosis_colors_map = plt.cm.Set1(np.linspace(0, 1, len(diagnosis_categories)))
+    diagnosis_to_color = {diag: diagnosis_colors_map[i] for i, diag in enumerate(diagnosis_categories)}
+    diagnosis_colors = [diagnosis_to_color[d] for d in diagnoses]
+
+    # Row 1: LATENT SPACE
+    # Plot 1: Dataset
+    axes[0, 0].scatter(embedding_latent[:, 0], embedding_latent[:, 1],
+                    c=dataset_colors, s=10, alpha=0.6)
+    axes[0, 0].set_title(f'LATENT by Dataset\n(Silhouette: {silhouette_dataset:.2f})', fontsize=12)
+    axes[0, 0].set_xlabel('UMAP 1')
+    axes[0, 0].set_ylabel('UMAP 2')
+
+    # Plot 2: Age (with REAL values!)
+    scatter = axes[0, 1].scatter(embedding_latent[:, 0], embedding_latent[:, 1],
+                                c=ages_real,  # ← CHANGED!
+                                cmap='viridis', s=10, alpha=0.6, vmin=0, vmax=90)
+    axes[0, 1].set_title(f'LATENT by Age (r={max_umap_age_corr:.2f})', fontsize=12)
+    axes[0, 1].set_xlabel('UMAP 1')
+    axes[0, 1].set_ylabel('UMAP 2')
+    cbar = plt.colorbar(scatter, ax=axes[0, 1])
+    cbar.set_label('Age (years)', rotation=270, labelpad=15)
+
+    # Plot 3: Sex
+    sex_colors = ['#FF6B6B' if s == 0 else '#4ECDC4' for s in sexes]
+    axes[0, 2].scatter(embedding_latent[:, 0], embedding_latent[:, 1],
+                    c=sex_colors, s=10, alpha=0.6)
+    axes[0, 2].set_title('LATENT by Sex', fontsize=12)
+    axes[0, 2].set_xlabel('UMAP 1')
+    axes[0, 2].set_ylabel('UMAP 2')
+    from matplotlib.patches import Patch
+    axes[0, 2].legend(handles=[
+        Patch(facecolor='#FF6B6B', label='Female'),
+        Patch(facecolor='#4ECDC4', label='Male')
+    ])
+
+    # Row 2: Additional info
+    # Plot 4: IQR (with REAL values!)
+    scatter = axes[1, 0].scatter(embedding_latent[:, 0], embedding_latent[:, 1],
+                                c=iqrs_real,  # ← CHANGED!
+                                cmap='plasma', s=10, alpha=0.6)
+    axes[1, 0].set_title('LATENT by IQR', fontsize=12)
+    axes[1, 0].set_xlabel('UMAP 1')
+    axes[1, 0].set_ylabel('UMAP 2')
+    cbar = plt.colorbar(scatter, ax=axes[1, 0])
+    cbar.set_label('IQR', rotation=270, labelpad=15)
+
+    # Plot 5: DIAGNOSIS (WICHTIGSTER PLOT!)
+    axes[1, 1].scatter(embedding_latent[:, 0], embedding_latent[:, 1],
+                    c=diagnosis_colors, s=10, alpha=0.7, edgecolors='black', linewidth=0.3)
+    axes[1, 1].set_title('LATENT by DIAGNOSIS', fontsize=12, fontweight='bold')
     axes[1, 1].set_xlabel('UMAP 1')
     axes[1, 1].set_ylabel('UMAP 2')
 
+    # Legend für Diagnosen
     legend_elements = [
+        Patch(facecolor=diagnosis_to_color[diag], label=diag, edgecolor='black')
+        for diag in diagnosis_categories
+    ]
+    axes[1, 1].legend(handles=legend_elements, loc='best', fontsize=10)
+
+    # Plot 6: Dataset Legend (verschoben von vorher)
+    axes[1, 2].axis('off')
+    legend_elements_dataset = [
         Patch(facecolor=colors_map[i], label=train_dataset.dataset_categories[i])
         for i in range(n_datasets)
     ]
-    axes[1, 1].legend(handles=legend_elements, loc='best', fontsize=8, ncol=2)
+    axes[1, 2].legend(handles=legend_elements_dataset, loc='center', fontsize=10, 
+                    title='Datasets', title_fontsize=12)
 
-    plt.suptitle(f'Conditional VAE Latent Space Analysis (β={baseline_model.beta})', 
-                 fontsize=14, y=1.00)
+    plt.suptitle(f'CVAE Latent Space Analysis (β={baseline_model.beta}, contr_w={contr_loss_weight})', 
+                fontsize=14, y=0.995)
     plt.tight_layout()
     plt.savefig(f"{save_dir}/figures/cvae_latent_analysis.png", dpi=300, bbox_inches='tight')
     plt.close()
 
     log_and_print(f"\n✓ Analysis complete! Plots saved to {save_dir}/figures/")
     log_and_print("="*80 + "\n")
-    
-    # ========== END OF ANALYSIS ==========
     
     # Save training metadata
     training_metadata = {
@@ -543,7 +657,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         "bootstrap_std_val_loss": metrics_df['final_val_loss'].std(),
         "device": str(device),
         "normalization_method": normalization_method,
-        "silhouette_score": silhouette,  # ← NEU! Save in metadata
+        "silhouette_score": silhouette_dataset,  # ← NEU! Save in metadata
         "max_age_corr": max_age_corr,     # ← NEU!
         "max_sex_corr": max_sex_corr,     # ← NEU!
         "max_iqr_corr": max_iqr_corr,     # ← NEU!
@@ -555,6 +669,29 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     pd.DataFrame([training_metadata]).to_csv(f"{save_dir}/training_metadata.csv", index=False)
     
     log_and_print(f"Normative modeling training completed successfully!\nResults saved to {save_dir}")
+
+        # ========== SAVE CONDITIONING INFO FOR TESTING ==========
+    log_and_print("Saving conditioning information for testing...")
+
+    conditioning_info = {
+        'age_scaler_mean': train_dataset.age_scaler.mean_[0],
+        'age_scaler_scale': train_dataset.age_scaler.scale_[0],
+        'iqr_scaler_mean': train_dataset.iqr_scaler.mean_[0],
+        'iqr_scaler_scale': train_dataset.iqr_scaler.scale_[0],
+        'dataset_categories': train_dataset.dataset_categories,
+        'condition_dim': train_dataset.condition_dim,
+        'n_age_bins': n_age_bins if contr_loss_weight > 0 else 0,
+        'age_bin_edges': train_dataset.age_bin_edges.tolist() if train_dataset.age_bin_edges is not None else None
+    }
+
+    import json
+    with open(f"{save_dir}/conditioning_info.json", 'w') as f:
+        json.dump(conditioning_info, f, indent=2)
+
+    log_and_print(f"✓ Saved conditioning info to {save_dir}/conditioning_info.json")
+
+    # Also save as CSV for easy inspection
+    pd.DataFrame([conditioning_info]).to_csv(f"{save_dir}/conditioning_info.csv", index=False)
     
     return save_dir, bootstrap_models, bootstrap_metrics  # ← RETURN muss am Ende sein!
 
@@ -589,7 +726,9 @@ if __name__ == "__main__":
         normalization_method=args.normalization_method,
         output_dir=args.output_dir,
         beta=args.beta,  
-        dropout=args.dropout
+        dropout=args.dropout,
+        contr_loss_weight=args.contr_loss_weight,  # ← ADD THIS
+        n_age_bins=args.n_age_bins  # ← ADD THIS
     )
     
     # Final log message

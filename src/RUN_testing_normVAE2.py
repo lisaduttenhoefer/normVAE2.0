@@ -11,7 +11,12 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from scipy import stats
 
-from models.ContrastVAE_2D import NormativeVAE_2D
+from models.ConditionalVAE_2D import (
+    ConditionalVAE_2D,
+    ConditionalDataset,
+    create_conditional_datasets
+
+)
 from utils.support_f import (
     get_all_data,
     extract_measurements
@@ -25,22 +30,38 @@ from utils.logging_utils import (
     log_and_print_test, 
     end_logging
 )
-from utils.dev_scores_utils import (
-    calculate_deviations, 
-    plot_deviation_distributions, 
-    analyze_regional_deviations,
-    analyze_volume_type_separately,
-    calculate_reconstruction_deviation,
-    calculate_kl_divergence_deviation,
-    calculate_latent_deviation_aguila,
+
+# ========== CVAE-SPECIFIC FUNCTIONS ==========
+from utils.dev_scores_utils_CVAE import (
+    # Core deviation functions (need conditions)
+    calculate_deviations_cvae,
+    calculate_reconstruction_deviation_cvae,
+    calculate_kl_divergence_deviation_cvae,
+    calculate_latent_deviation_aguila_cvae,
+    compute_hc_latent_stats_cvae,
+    visualize_embeddings_multiple_cvae,
+    
+    # Statistical helpers (no model needed)
+    calculate_cliffs_delta,
+    bootstrap_cliffs_delta_ci,
     calculate_combined_deviation,
-    compute_hc_latent_stats,
+    
+    # Formatting helpers
+    format_roi_name_for_plotting,
+    format_roi_names_list_for_plotting,
+    
+    # Visualization helpers
     save_latent_visualizations,
-    visualize_embeddings_multiple,
+    
+    # Shared analysis functions (imported from original)
     plot_all_deviation_metrics_errorbar,
+    plot_deviation_distributions,
+    analyze_regional_deviations,
     create_corrected_correlation_heatmap,
-    run_analysis_with_options
+    run_analysis_with_options,
 )
+
+# You DON'T need to import from dev_scores_utils.py anymore!
 
 from diagnose_vae import run_full_diagnostics
 
@@ -77,6 +98,20 @@ def main(args):
     log_and_print_test(f"Model directory: {model_dir}")
     log_and_print_test(f"Output directory: {save_dir}")
     
+    # ========== CVAE NEEDS METADATA: Load metadata for conditions ==========
+    log_and_print_test("Loading CVAE metadata for test set...")
+
+    # Load the complete metadata CSV
+    metadata_cvae = pd.read_csv(
+        "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+    )
+
+    # Rename Sex_Male to Sex if needed
+    if 'Sex_Male' in metadata_cvae.columns and 'Sex' not in metadata_cvae.columns:
+        metadata_cvae = metadata_cvae.rename(columns={'Sex_Male': 'Sex'})
+
+    log_and_print_test(f"Loaded CVAE metadata: {metadata_cvae.shape}")
+
     # ---------------------- LOAD MODEL CONFIG FROM TRAINING (consistency)  --------------------------------------------
     try:
         config_path = os.path.join(model_dir, "config.csv")
@@ -193,8 +228,7 @@ def main(args):
     log_and_print_test(f"Clinical data has {clinical_data.shape[1]} features")
     
     # ============================================================================
-    # OPTION 1 FIX: Filter annotations_dev to match clinical_data subjects
-    # ============================================================================
+    # Filter annotations_dev to match clinical_data subjects
     log_and_print_test(f"Annotations shape before filtering: {len(annotations_dev)}")
     log_and_print_test(f"Clinical data subjects: {clinical_data.shape[0]}")
     
@@ -227,14 +261,139 @@ def main(args):
         log_and_print_test(f"Filtered annotations using subject ID column: {subject_id_column}")
     
     log_and_print_test(f"Annotations shape after filtering: {len(annotations_dev)}")
-    
+
     # Verify alignment
     if len(annotations_dev) != clinical_data.shape[0]:
-        raise ValueError(f"Mismatch after filtering: {len(annotations_dev)} annotations vs {clinical_data.shape[0]} clinical data rows")
-    
+        raise ValueError(f"Mismatch: {len(annotations_dev)} annotations vs {clinical_data.shape[0]} clinical data")
+
     log_and_print_test("✓ Annotations and clinical data are now aligned!")
-    # ============================================================================
-    
+
+    # ========== SCHRITT 3: MERGE CVAE METADATA (HIER EINFÜGEN!) ==========
+    log_and_print_test("\n" + "="*80)
+    log_and_print_test("MERGING CVAE METADATA")
+    log_and_print_test("="*80)
+
+    # Check which columns are missing
+    required_cols = ['Age', 'Sex', 'IQR', 'Dataset']
+    missing_cols = [col for col in required_cols if col not in annotations_dev.columns]
+
+    if missing_cols:
+        log_and_print_test(f"Missing columns: {missing_cols} - merging from metadata CSV")
+        
+        # Merge
+        merge_cols = ['Filename'] + missing_cols
+        annotations_dev = annotations_dev.merge(
+            metadata_cvae[merge_cols],  # metadata_cvae wurde in Schritt 2 geladen!
+            on='Filename',
+            how='left'
+        )
+        
+        log_and_print_test(f"✓ Merged columns: {merge_cols}")
+    else:
+        log_and_print_test("✓ All required columns already present")
+
+    # Rename Sex_Male if needed
+    if 'Sex_Male' in annotations_dev.columns and 'Sex' not in annotations_dev.columns:
+        annotations_dev = annotations_dev.rename(columns={'Sex_Male': 'Sex'})
+
+    # Convert Sex to float
+    if annotations_dev['Sex'].dtype == 'object':
+        log_and_print_test("Converting Sex from string to numeric...")
+        annotations_dev['Sex'] = annotations_dev['Sex'].map({
+            'F': 0.0, 'Female': 0.0, 'f': 0.0,
+            'M': 1.0, 'Male': 1.0, 'm': 1.0,
+            0: 0.0, 1: 1.0
+        })
+
+    annotations_dev['Sex'] = annotations_dev['Sex'].astype(float)
+    annotations_dev['Age'] = annotations_dev['Age'].astype(float)
+    annotations_dev['IQR'] = annotations_dev['IQR'].astype(float)
+
+    # Validate - Drop rows with missing metadata
+    for col in required_cols:
+        n_missing = annotations_dev[col].isna().sum()
+        if n_missing > 0:
+            log_and_print_test(f"⚠️  {n_missing} samples missing {col} - dropping these rows")
+            # Also drop from clinical_data!
+            valid_mask = ~annotations_dev[col].isna()
+            annotations_dev = annotations_dev[valid_mask].reset_index(drop=True)
+            clinical_data = clinical_data[valid_mask.values]
+            log_and_print_test(f"   New shape: {len(annotations_dev)} samples")
+
+    log_and_print_test(f"\n✓ Metadata validated")
+    log_and_print_test(f"  Age range: {annotations_dev['Age'].min():.1f} - {annotations_dev['Age'].max():.1f}")
+    log_and_print_test(f"  Sex values: {sorted(annotations_dev['Sex'].unique())}")
+    log_and_print_test(f"  Datasets: {sorted(annotations_dev['Dataset'].unique())}")
+    log_and_print_test(f"  IQR range: {annotations_dev['IQR'].min():.3f} - {annotations_dev['IQR'].max():.3f}")
+    log_and_print_test(f"  Final sample count: {len(annotations_dev)}")
+
+    # ========== SCHRITT 4: CREATE CONDITIONAL DATASET (DIREKT DANACH) ==========
+    log_and_print_test("\n" + "="*80)
+    log_and_print_test("CREATING CONDITIONAL DATASET")
+    log_and_print_test("="*80)
+
+    # Try to load dataset categories from training
+    try:
+        train_metadata_path = os.path.join(model_dir, "data", "train_metadata.csv")
+        if os.path.exists(train_metadata_path):
+            train_metadata = pd.read_csv(train_metadata_path)
+            dataset_categories = sorted(train_metadata['Dataset'].unique().tolist())
+            log_and_print_test(f"✓ Loaded dataset categories from training: {dataset_categories}")
+        else:
+            dataset_categories = sorted(annotations_dev['Dataset'].unique().tolist())
+            log_and_print_test(f"⚠️  Using test data datasets (training not found): {dataset_categories}")
+    except Exception as e:
+        dataset_categories = sorted(annotations_dev['Dataset'].unique().tolist())
+        log_and_print_test(f"⚠️  Fallback datasets: {dataset_categories}")
+
+    # Load training scalers if available
+    try:
+        import pickle
+        scaler_path = os.path.join(model_dir, "data", "scalers.pkl")
+        if os.path.exists(scaler_path):
+            with open(scaler_path, 'rb') as f:
+                scalers = pickle.load(f)
+            age_scaler = scalers['age_scaler']
+            iqr_scaler = scalers['iqr_scaler']
+            log_and_print_test("✓ Loaded training scalers")
+        else:
+            from sklearn.preprocessing import StandardScaler
+            age_scaler = StandardScaler()
+            iqr_scaler = StandardScaler()
+            age_scaler.fit(annotations_dev['Age'].values.reshape(-1, 1))
+            iqr_scaler.fit(annotations_dev['IQR'].values.reshape(-1, 1))
+            log_and_print_test("⚠️  Created new scalers (training scalers not found)")
+    except Exception as e:
+        from sklearn.preprocessing import StandardScaler
+        age_scaler = StandardScaler()
+        iqr_scaler = StandardScaler()
+        age_scaler.fit(annotations_dev['Age'].values.reshape(-1, 1))
+        iqr_scaler.fit(annotations_dev['IQR'].values.reshape(-1, 1))
+        log_and_print_test("⚠️  Created new scalers (fallback)")
+
+    # Create Conditional Dataset
+    test_dataset = ConditionalDataset(
+        measurements=clinical_data.numpy(),
+        metadata=annotations_dev,
+        dataset_categories=dataset_categories,
+        fit_scalers=False
+    )
+
+    # Set scalers
+    test_dataset.set_scalers(age_scaler, iqr_scaler)
+
+    log_and_print_test(f"\n✓ Conditional Dataset created:")
+    log_and_print_test(f"  Samples: {len(test_dataset)}")
+    log_and_print_test(f"  Condition dim: {test_dataset.condition_dim}")
+    log_and_print_test(f"  Dataset categories: {test_dataset.dataset_categories}")
+
+    # Extract conditions as tensor
+    test_conditions = torch.FloatTensor(test_dataset.conditions)
+    log_and_print_test(f"  Conditions shape: {test_conditions.shape}")
+
+    log_and_print_test("="*80 + "\n")
+
+
     # ------------------------------------------ LOADING MODELS  --------------------------------------------
     log_and_print_test("Loading bootstrap models...")
     
@@ -253,8 +412,20 @@ def main(args):
     first_model_path = os.path.join(models_dir, model_files[0])
     checkpoint = torch.load(first_model_path, map_location=device)
     
-    # Get input_dim from the first layer's weight shape
-    input_dim = checkpoint['encoder.0.weight'].shape[1]
+    # Get input_dim from first model
+    first_model_path = os.path.join(models_dir, model_files[0])
+    checkpoint = torch.load(first_model_path, map_location=device)
+
+    # CVAE: encoder.0 hat shape [hidden_dim_1, input_dim + condition_dim]
+    encoder_input_size = checkpoint['encoder.0.weight'].shape[1]
+
+    # Subtract condition_dim to get input_dim
+    input_dim = encoder_input_size - test_dataset.condition_dim
+
+    log_and_print_test(f"Models were trained with:")
+    log_and_print_test(f"  - Total encoder input: {encoder_input_size}")
+    log_and_print_test(f"  - Condition dim: {test_dataset.condition_dim}")
+    log_and_print_test(f"  - Data input dim: {input_dim}")
     log_and_print_test(f"Models were trained with input_dim: {input_dim}")
     
     # Verify that clinical data has same dimension
@@ -267,12 +438,14 @@ def main(args):
         log_and_print_test(f"Please check your volume_type configuration!")
         raise ValueError(f"Input dimension mismatch: models expect {input_dim}, but data has {input_dim_from_data} features")
     
+    # Get condition_dim from checkpoint or dataset
+    condition_dim = test_dataset.condition_dim
     # Load all bootstrap models
     bootstrap_models = []
     for model_file in model_files:
-        # Initialize model with same architecture as training
-        model = NormativeVAE_2D(
+        model = ConditionalVAE_2D(
             input_dim=input_dim,
+            condition_dim=condition_dim,  
             hidden_dim_1=hidden_dim_1,
             hidden_dim_2=hidden_dim_2,
             latent_dim=latent_dim,
@@ -281,14 +454,15 @@ def main(args):
             recon_loss_weight=recon_loss_weight,
             contr_loss_weight=contr_loss_weight,
             dropout_prob=0.1,
+            beta=0.5,  # From training
             device=device
         )
         
-        # Load model weights
+        # Load weights
         model_path = os.path.join(models_dir, model_file)
         model.load_state_dict(torch.load(model_path, map_location=device))
-        model.to(device) 
-        model.eval()  # Set model to evaluation mode 
+        model.to(device)
+        model.eval()
         bootstrap_models.append(model)
         log_and_print_test(f"Loaded model: {model_file}")
     
@@ -306,8 +480,9 @@ def main(args):
         # Load baseline model FIRST (needed for diagnostics)
         baseline_model_path = os.path.join(models_dir, "baseline_model.pt")
         if os.path.exists(baseline_model_path):
-            baseline_model = NormativeVAE_2D(
+            baseline_model = ConditionalVAE_2D(
                 input_dim=input_dim,
+                condition_dim=condition_dim,  # ← NEU!
                 hidden_dim_1=hidden_dim_1,
                 hidden_dim_2=hidden_dim_2,
                 latent_dim=latent_dim,
@@ -316,6 +491,7 @@ def main(args):
                 recon_loss_weight=recon_loss_weight,
                 contr_loss_weight=contr_loss_weight,
                 dropout_prob=0.1,
+                beta=0.5,
                 device=device
             )
             baseline_model.load_state_dict(torch.load(baseline_model_path, map_location=device))
@@ -329,18 +505,21 @@ def main(args):
         # Separate HC and patient groups
         hc_mask = annotations_dev['Diagnosis'] == norm_diagnosis
         
-        # Create HC test loader
+        hc_conditions = test_conditions[hc_mask]
         hc_test_dataset = TensorDataset(
             clinical_data[hc_mask],
+            hc_conditions,  # ← NEU!
             torch.zeros(hc_mask.sum())
         )
         hc_test_loader = DataLoader(hc_test_dataset, batch_size=32, shuffle=False)
 
-        # Create MDD test loader (if available)
+        # Ähnlich für MDD:
         mdd_mask = annotations_dev['Diagnosis'] == 'MDD'
         if mdd_mask.sum() > 0:
+            mdd_conditions = test_conditions[mdd_mask]
             mdd_test_dataset = TensorDataset(
                 clinical_data[mdd_mask],
+                mdd_conditions,  # ← NEU!
                 torch.ones(mdd_mask.sum())
             )
             mdd_test_loader = DataLoader(mdd_test_dataset, batch_size=32, shuffle=False)
@@ -354,8 +533,16 @@ def main(args):
                 patient_name="MDD",
                 save_dir=f"{save_dir}/diagnostics_pre_testing"
             )
-            
-            log_and_print_test("✓ Pre-testing diagnostics completed")
+        hc_test_loader = DataLoader(hc_test_dataset, batch_size=32, shuffle=False)
+
+        # Create MDD test loader (if available)
+        mdd_mask = annotations_dev['Diagnosis'] == 'MDD'
+        if mdd_mask.sum() > 0:
+            mdd_test_dataset = TensorDataset(
+                clinical_data[mdd_mask],
+                torch.ones(mdd_mask.sum())
+            )
+            mdd_test_loader = DataLoader(mdd_test_dataset, batch_size=32, shuffle=False)
             
             # Log key findings
             hc_kl = hc_results['kl_per_sample'].mean()
@@ -422,9 +609,10 @@ def main(args):
         
         # Original bootstrap method (keep this!)
         log_and_print_test("\n[1/5] Calculating BOOTSTRAP deviation scores (original method)...")
-        results_df = calculate_deviations(
+        results_df = calculate_deviations_cvae(
             normative_models=bootstrap_models,
             data_tensor=clinical_data,
+            conditions_tensor=test_conditions,
             norm_diagnosis=norm_diagnosis,
             annotations_df=annotations_dev,
             device=device,
@@ -438,8 +626,9 @@ def main(args):
         
         # METHOD 1: Reconstruction Deviation
         log_and_print_test("\n[2/5] Computing D_MSE (Reconstruction-based)...")
-        deviation_recon = calculate_reconstruction_deviation(
+        deviation_recon = calculate_reconstruction_deviation_cvae(
             model=baseline_model,
+            conditions_tensor=test_conditions,
             data=clinical_data,
             device=device
         )
@@ -448,8 +637,9 @@ def main(args):
         
         # METHOD 2: KL Divergence
         log_and_print_test("\n[3/5] Computing D_KL (KL Divergence)...")
-        deviation_kl = calculate_kl_divergence_deviation(
+        deviation_kl = calculate_kl_divergence_deviation_cvae(
             model=baseline_model,
+            conditions_tensor=test_conditions,
             data=clinical_data,
             device=device
         )
@@ -458,14 +648,16 @@ def main(args):
         
         # METHOD 3: Latent Space Deviation (Aguila method)
         log_and_print_test("\n[4/5] Computing D_latent (Aguila et al. method)...")
-        hc_latent_stats = compute_hc_latent_stats(
+        hc_latent_stats = compute_hc_latent_stats_cvae(
             model=baseline_model,
             hc_data=hc_data,
+            hc_conditions=hc_conditions,
             device=device
         )
         
-        deviation_latent, per_dim_deviations = calculate_latent_deviation_aguila(
+        deviation_latent, per_dim_deviations = calculate_latent_deviation_aguila_cvae(
             model=baseline_model,
+            conditions_tensor=test_conditions,
             data=clinical_data,
             hc_latent_stats=hc_latent_stats,
             device=device
@@ -686,10 +878,11 @@ def main(args):
     log_and_print_test("="*80 + "\n")
     
     try:
-        results = visualize_embeddings_multiple(
+        results = visualize_embeddings_multiple_cvae(
             normative_models=bootstrap_models,
             data_tensor=clinical_data,
             annotations_df=annotations_dev,
+            conditions_tensor=test_conditions,
             device=device,
             columns_to_plot=["Diagnosis", "Dataset", "Sex"]  # Adjusted columns
         )

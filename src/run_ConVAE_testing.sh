@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=vae_v2_testing
+#SBATCH --job-name=conditional_VAE_testing
 #SBATCH --mail-user=lisa.duttenhoefer@stud.uni-heidelberg.de
-#SBATCH --mail-type=FAIL,END
+#SBATCH --mail-type=FAIL
 #SBATCH --output=/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/logs/slurm_test_%j.out
 #SBATCH --error=/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/logs/slurm_test_%j.err
 #SBATCH --time=12:00:00
@@ -25,14 +25,14 @@ echo ""
 
 # IMPORTANT: Update this path to your actual training results directory
 # Example: /net/data.isilon/.../norm_results_HC_Vgm_Vwm_Vcsf_G_T_all_20251022_1625
-MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_V_g_m_lpba40_neuromorphometrics_ibsr_columnwise_20251104_1403"
+MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_T_G_neuromorphometrics_aparc_dk40_columnwise_20251111_1308"
 echo "=== Model Directory ==="
 echo "$MODEL_DIR"
 echo ""
 
 export PYTHONUNBUFFERED=1
 
-python -u src/RUN_testing_normVAE2.py \
+python -u src/RUN_testing_CondVAE.py \
     --model_dir "$MODEL_DIR" \
     --output_dir "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING" \
     --seed 42 &> logs/testing_output_${SLURM_JOB_ID}.log
