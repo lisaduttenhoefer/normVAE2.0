@@ -84,7 +84,7 @@ def main(args):
     
     # Extract model name from the model directory for consistent naming
     model_name = os.path.basename(model_dir)
-    save_dir = f"{args.output_dir}/clinical_deviations_{model_name}_{timestamp}" if args.output_dir else f"/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/catatonia_VAE-main_v2/analysis/TESTING/deviation_results_{model_name}_{timestamp}"
+    save_dir = f"{args.output_dir}/clinical_deviations_{model_name}_{timestamp}" if args.output_dir else f"/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/catatonia_VAE-main_v2/analysis/nVAE/TESTING/deviation_results_{model_name}_{timestamp}"
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(f"{save_dir}/figures", exist_ok=True)
     os.makedirs(f"{save_dir}/figures/distributions", exist_ok=True)

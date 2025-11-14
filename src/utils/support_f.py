@@ -85,22 +85,38 @@ def split_df(path_original: str, path_to_dir: str):
     return path_hc, path_non_hc
 
 
-def split_df_adapt(path_original: str, path_to_dir: str, norm_diagnosis: str = "HC", train_ratio: float = 0.7, random_seed: int = 42):
+def split_df_adapt(
+    path_original: str,
+    path_to_dir: str = None,
+    norm_diagnosis: str = "HC",
+    train_ratio: float = 0.7,
+    random_seed: int = 42,
+    save_splits: bool = False  # ← NEW: Optional saving
+):
+    """
+    Split dataset into train/test DataFrames.
     
-    # function to split the dataset depending on adaptable variables norm_diagnosis and train_ratio
+    Args:
+        path_original: Path to complete metadata CSV
+        path_to_dir: Directory to save splits (if save_splits=True)
+        norm_diagnosis: Normative diagnosis
+        train_ratio: Train split ratio
+        random_seed: Random seed
+        save_splits: Whether to save CSVs (default: False)
     
-    if not os.path.exists(path_to_dir):
-        os.makedirs(path_to_dir)
+    Returns:
+        train_df, test_df: DataFrames (not paths!)
+    """
     
     df = pd.read_csv(path_original)
-
     if "Unnamed: 0" in df.columns:
         df = df.drop(columns=["Unnamed: 0"])
 
     np.random.seed(random_seed)
     
-    norm_data = df[df["Diagnosis"] == norm_diagnosis].copy() #-> training (NORM)
-    other_data = df[df["Diagnosis"] != norm_diagnosis].copy() #-> testing (not NORM)
+    # Split
+    norm_data = df[df["Diagnosis"] == norm_diagnosis].copy()
+    other_data = df[df["Diagnosis"] != norm_diagnosis].copy()
     
     num_train = int(len(norm_data) * train_ratio)
     
@@ -109,20 +125,25 @@ def split_df_adapt(path_original: str, path_to_dir: str, norm_diagnosis: str = "
     train_indices = all_indices[:num_train]
     test_indices = all_indices[num_train:]
     
-    train_norm = norm_data.loc[train_indices]
-    test_norm = norm_data.loc[test_indices]
+    train_norm = norm_data.loc[train_indices].reset_index(drop=True)
+    test_norm = norm_data.loc[test_indices].reset_index(drop=True)
+    test_data = pd.concat([test_norm, other_data]).reset_index(drop=True)
     
-    test_data = pd.concat([test_norm, other_data])
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    path_train = f"{path_to_dir}/train_metadata{norm_diagnosis}_{train_ratio}{timestamp}.csv"
-    path_test = f"{path_to_dir}/test_metadata{norm_diagnosis}_{train_ratio}{timestamp}.csv"
+    print(f"✓ Split created (seed={random_seed}):")
+    print(f"  Train: {len(train_norm)} {norm_diagnosis}")
+    print(f"  Test: {len(test_data)} total ({len(test_norm)} {norm_diagnosis} + {len(other_data)} patients)")
     
-    train_norm.to_csv(path_train, index=False)
-    test_data.to_csv(path_test, index=False)
+    # Optional: Save to CSV
+    if save_splits and path_to_dir:
+        os.makedirs(path_to_dir, exist_ok=True)
+        
+        path_train = f"{path_to_dir}/train_metadata_{norm_diagnosis}_{train_ratio}_seed{random_seed}.csv"
+        path_test = f"{path_to_dir}/test_metadata_{norm_diagnosis}_{train_ratio}_seed{random_seed}.csv"
+        
+        train_norm.to_csv(path_train, index=False)
+        test_data.to_csv(path_test, index=False)
+        
+        print(f"  Saved: {path_train}")
+        print(f"  Saved: {path_test}")
     
-    print(f"Training set erstellt: {path_train} ({len(train_norm)} Patienten)")
-    print(f"Test set erstellt: {path_test} ({len(test_data)} Patienten, davon {len(test_norm)} {norm_diagnosis} und {len(other_data)} andere)")
-    
-    return path_train, path_test
-
-    
+    return train_norm, test_data  # ← Return DataFrames!

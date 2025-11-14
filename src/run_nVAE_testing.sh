@@ -34,7 +34,7 @@ export PYTHONUNBUFFERED=1
 
 python -u src/RUN_testing_normVAE2.py \
     --model_dir "$MODEL_DIR" \
-    --output_dir "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING" \
+    --output_dir "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/nVAE/TESTING" \
     --seed 42 &> logs/testing_output_${SLURM_JOB_ID}.log
      
 

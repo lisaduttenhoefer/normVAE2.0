@@ -1,3 +1,10 @@
+"""
+RUN_testing_CondVAE.py
+
+Complete CVAE testing script - adapted for on-the-fly normalization workflow.
+All original functionality preserved, only data loading adapted.
+"""
+
 import argparse
 import os
 from pathlib import Path
@@ -11,18 +18,25 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from scipy import stats
 import json
+import pickle
 
 # ========== IMPORT CVAE VERSIONS ==========
 from models.ConditionalVAE_2D import ConditionalVAE_2D, ConditionalDataset
 from utils.support_f import extract_measurements
 from utils.config_utils_model import Config_2D
 
-from module.data_processing_hc import load_mri_data_2D_conditional
-
 from utils.logging_utils import (
     setup_logging_test, 
     log_and_print_test, 
     end_logging
+)
+
+# ========== IMPORT CVAE UTILS (NEW!) ==========
+from utils.cvae_utils import (
+    create_conditions_tensor_from_metadata,
+    load_and_normalize_test_data,
+    analyze_volume_type_separately_cvae,
+    analyze_latent_space_quality_cvae
 )
 
 # ========== IMPORT CVAE DEVIATION UTILS ==========
@@ -47,377 +61,17 @@ from utils.dev_scores_utils import (
 from diagnose_vae import run_full_diagnostics
 
 
-def create_conditions_tensor_from_metadata(metadata_df, conditioning_info):
-    """
-    Create conditions tensor for CVAE from metadata using training scalers.
-    
-    Args:
-        metadata_df: DataFrame with Age, Sex, IQR, Dataset columns
-        conditioning_info: Dict with scalers and categories from training
-    
-    Returns:
-        conditions_tensor: Tensor [n_samples, condition_dim]
-    """
-    n_samples = len(metadata_df)
-    
-    # ========== AGE (normalized) ==========
-    age_values = metadata_df['Age'].values.reshape(-1, 1)
-    age_normalized = (age_values - conditioning_info['age_scaler_mean']) / conditioning_info['age_scaler_scale']
-    age_normalized = age_normalized.flatten()
-    
-    # ========== SEX (binary) ==========
-    if metadata_df['Sex'].dtype == 'object':
-        sex_values = (metadata_df['Sex'].str.upper() == 'M').astype(float).values
-    else:
-        sex_values = metadata_df['Sex'].values.astype(float)
-    
-    # ========== IQR (normalized) ==========
-    iqr_values = metadata_df['IQR'].values.reshape(-1, 1)
-    iqr_normalized = (iqr_values - conditioning_info['iqr_scaler_mean']) / conditioning_info['iqr_scaler_scale']
-    iqr_normalized = iqr_normalized.flatten()
-    
-    # ========== DATASET (one-hot) ==========
-    dataset_categories = conditioning_info['dataset_categories']
-    dataset_onehot = np.zeros((n_samples, len(dataset_categories)))
-    
-    for i, dataset in enumerate(metadata_df['Dataset']):
-        if dataset in dataset_categories:
-            idx = dataset_categories.index(dataset)
-            dataset_onehot[i, idx] = 1.0
-        else:
-            log_and_print_test(f"Warning: Unknown dataset '{dataset}' - using zeros")
-    
-    # ========== COMBINE ALL ==========
-    conditions = np.column_stack([
-        age_normalized,
-        sex_values,
-        iqr_normalized,
-        dataset_onehot
-    ])
-    
-    conditions_tensor = torch.FloatTensor(conditions)
-    
-    log_and_print_test(f"Created conditions tensor: {conditions_tensor.shape}")
-    log_and_print_test(f"  - Age (normalized): 1")
-    log_and_print_test(f"  - Sex (binary): 1")
-    log_and_print_test(f"  - IQR (normalized): 1")
-    log_and_print_test(f"  - Dataset (one-hot): {len(dataset_categories)}")
-    
-    return conditions_tensor
-
-
-def analyze_volume_type_separately_cvae(
-    vtype, bootstrap_models, clinical_data, conditions_tensor, annotations_df,
-    roi_names, norm_diagnosis, device, base_save_dir, conditioning_info,
-    mri_data_path, atlas_name, metadata_path, custom_colors
-):
-    """
-    Analyze a specific volume type separately (CVAE version).
-    
-    This is a CVAE-adapted version of analyze_volume_type_separately.
-    """
-    
-    log_and_print_test(f"\n{'='*80}")
-    log_and_print_test(f"ANALYZING VOLUME TYPE: {vtype} (CVAE)")
-    log_and_print_test(f"{'='*80}\n")
-    
-    # Create subdirectory for this volume type
-    vtype_save_dir = os.path.join(base_save_dir, f"volume_type_{vtype}")
-    os.makedirs(vtype_save_dir, exist_ok=True)
-    os.makedirs(f"{vtype_save_dir}/figures", exist_ok=True)
-    os.makedirs(f"{vtype_save_dir}/figures/distributions", exist_ok=True)
-    
-    # Filter ROI names for this volume type
-    vtype_roi_indices = [i for i, name in enumerate(roi_names) if name.startswith(f"{vtype}_")]
-    vtype_roi_names = [roi_names[i] for i in vtype_roi_indices]
-    
-    if not vtype_roi_names:
-        log_and_print_test(f"No ROIs found for volume type {vtype}, skipping...")
-        return
-    
-    log_and_print_test(f"Found {len(vtype_roi_names)} ROIs for {vtype}")
-    
-    # Filter clinical data for this volume type
-    vtype_data = clinical_data[:, vtype_roi_indices]
-    log_and_print_test(f"Filtered data shape: {vtype_data.shape}")
-    
-    # ========== CALCULATE DEVIATIONS FOR THIS VOLUME TYPE ==========
-    log_and_print_test(f"\nCalculating deviation scores for {vtype}...")
-    
-    # Bootstrap method
-    results_df_vtype = calculate_deviations_cvae(
-        normative_models=bootstrap_models,
-        data_tensor=vtype_data,
-        conditions_tensor=conditions_tensor,
-        norm_diagnosis=norm_diagnosis,
-        annotations_df=annotations_df,
-        device=device,
-        roi_names=vtype_roi_names
-    )
-    
-    # Additional metrics (using baseline model)
-    baseline_model = bootstrap_models[0]
-    
-    hc_mask = annotations_df['Diagnosis'] == norm_diagnosis
-    hc_data_vtype = vtype_data[hc_mask]
-    hc_conditions = conditions_tensor[hc_mask]
-    
-    # D_MSE
-    deviation_recon = calculate_reconstruction_deviation_cvae(
-        model=baseline_model,
-        data=vtype_data.numpy(),
-        conditions=conditions_tensor.numpy(),
-        device=device
-    )
-    
-    # D_KL
-    deviation_kl = calculate_kl_divergence_deviation_cvae(
-        model=baseline_model,
-        data=vtype_data.numpy(),
-        conditions=conditions_tensor.numpy(),
-        device=device
-    )
-    
-    # D_latent
-    hc_latent_stats = compute_hc_latent_stats_cvae(
-        model=baseline_model,
-        hc_data=hc_data_vtype.numpy(),
-        hc_conditions=hc_conditions.numpy(),
-        device=device
-    )
-    
-    deviation_latent, _ = calculate_latent_deviation_aguila_cvae(
-        model=baseline_model,
-        data=vtype_data.numpy(),
-        conditions=conditions_tensor.numpy(),
-        hc_latent_stats=hc_latent_stats,
-        device=device
-    )
-    
-    # D_combined
-    deviation_combined = calculate_combined_deviation(
-        recon_dev=deviation_recon,
-        kl_dev=deviation_kl
-    )
-    
-    # Add to results
-    results_df_vtype['deviation_score_recon'] = deviation_recon
-    results_df_vtype['deviation_score_kl'] = deviation_kl
-    results_df_vtype['deviation_score_latent_aguila'] = deviation_latent
-    results_df_vtype['deviation_score_combined'] = deviation_combined
-    
-    log_and_print_test(f"✓ Computed all deviation metrics for {vtype}")
-    
-    # ========== SAVE RESULTS ==========
-    results_file = os.path.join(vtype_save_dir, f"deviation_scores_{vtype}.csv")
-    results_df_vtype.to_csv(results_file, index=False)
-    log_and_print_test(f"Saved: {results_file}")
-    
-    # ========== PLOTS ==========
-    plot_all_deviation_metrics_errorbar(
-        results_df=results_df_vtype,
-        save_dir=vtype_save_dir,
-        norm_diagnosis=norm_diagnosis,
-        custom_colors=custom_colors,
-        name=f"{vtype}_Analysis"
-    )
-    
-    # ========== REGIONAL ANALYSIS ==========
-    log_and_print_test(f"\nPerforming regional analysis for {vtype}...")
-    
-    regional_results = analyze_regional_deviations(
-        results_df=results_df_vtype,
-        save_dir=vtype_save_dir,
-        clinical_data_path=mri_data_path,
-        volume_type=[vtype],
-        atlas_name=atlas_name,
-        roi_names=vtype_roi_names,
-        norm_diagnosis=norm_diagnosis,
-        name=f"{vtype}_analysis",
-        add_catatonia_subgroups=False,
-        metadata_path=metadata_path,
-        merge_CAT_groups=True
-    )
-    
-    if regional_results is not None and not regional_results.empty:
-        regional_file = os.path.join(vtype_save_dir, f"regional_effect_sizes_{vtype}.csv")
-        regional_results.to_csv(regional_file, index=False)
-        log_and_print_test(f"Saved regional results: {regional_file}")
-    
-    log_and_print_test(f"✓ Completed analysis for {vtype}")
-
-def analyze_latent_space_quality_cvae(
-    model, data_tensor, conditions_tensor, annotations_df, 
-    save_dir, device='cuda'
-):
-    """
-    Analyze latent space quality with UMAP visualizations (CVAE version).
-    Similar to post-training analysis but for test data.
-    """
-    
-    log_and_print_test("\n" + "="*80)
-    log_and_print_test("LATENT SPACE QUALITY ANALYSIS")
-    log_and_print_test("="*80)
-    
-    os.makedirs(f"{save_dir}/latent_analysis", exist_ok=True)
-    
-    # ========== ENCODE DATA TO LATENT SPACE ==========
-    model.eval()
-    with torch.no_grad():
-        data_dev = data_tensor.to(device)
-        cond_dev = conditions_tensor.to(device)
-        _, mu, _ = model(data_dev, cond_dev)
-        latents = mu.cpu().numpy()
-    
-    log_and_print_test(f"Encoded {len(latents)} samples to latent space (dim={latents.shape[1]})")
-    
-    # ========== COMPUTE UMAP ==========
-    log_and_print_test("Computing UMAP projection...")
-    
-    import umap
-    reducer = umap.UMAP(
-        n_neighbors=15,
-        min_dist=0.1,
-        metric='euclidean',
-        random_state=42,
-        n_jobs=1
-    )
-    
-    umap_embeddings = reducer.fit_transform(latents)
-    log_and_print_test(f"UMAP embedding shape: {umap_embeddings.shape}")
-    
-    # ========== SILHOUETTE SCORE (Dataset separation) ==========
-    from sklearn.metrics import silhouette_score
-    
-    if 'Dataset' in annotations_df.columns:
-        unique_datasets = annotations_df['Dataset'].nunique()
-        if unique_datasets > 1:
-            try:
-                dataset_labels = pd.Categorical(annotations_df['Dataset']).codes
-                silhouette = silhouette_score(latents, dataset_labels)
-                log_and_print_test(f"\nSilhouette Score (Dataset separation): {silhouette:.3f}")
-                
-                if silhouette < 0.2:
-                    log_and_print_test("✓ EXCELLENT! Datasets well mixed (site effects removed)")
-                elif silhouette < 0.4:
-                    log_and_print_test("✓ GOOD! Datasets reasonably mixed")
-                else:
-                    log_and_print_test("⚠️  WARNING! Strong dataset clustering (site effects remain)")
-            except Exception as e:
-                log_and_print_test(f"Could not compute silhouette score: {e}")
-    
-    # ========== OVERALL CONDITION CORRELATIONS ==========
-    log_and_print_test("\n=== OVERALL CONDITION CORRELATION ===")
-    
-    # Age correlation (overall)
-    age_corr = None
-    if 'Age' in annotations_df.columns:
-        age_corr = np.abs(np.corrcoef(latents.T, annotations_df['Age'].values)[:-1, -1]).max()
-        log_and_print_test(f"Max Age correlation (all subjects): {age_corr:.3f}")
-    
-    # Sex correlation
-    sex_corr = None
-    if 'Sex' in annotations_df.columns:
-        sex_numeric = (annotations_df['Sex'].str.upper() == 'M').astype(float) if annotations_df['Sex'].dtype == 'object' else annotations_df['Sex']
-        sex_corr = np.abs(np.corrcoef(latents.T, sex_numeric)[:-1, -1]).max()
-        log_and_print_test(f"Max Sex correlation: {sex_corr:.3f}")
-    
-    # IQR correlation
-    iqr_corr = None
-    if 'IQR' in annotations_df.columns:
-        iqr_corr = np.abs(np.corrcoef(latents.T, annotations_df['IQR'].values)[:-1, -1]).max()
-        log_and_print_test(f"Max IQR correlation: {iqr_corr:.3f}")
-    
-    if all(c is not None and c < 0.2 for c in [age_corr, sex_corr, iqr_corr]):
-        log_and_print_test("✓ EXCELLENT! Conditions well disentangled (overall)")
-    elif all(c is not None and c < 0.3 for c in [age_corr, sex_corr, iqr_corr]):
-        log_and_print_test("✓ GOOD! Conditions reasonably disentangled (overall)")
-    else:
-        log_and_print_test("⚠️  WARNING! Some conditions not fully disentangled (overall)")
-    
-    # ========== AGE CORRELATION BY DIAGNOSIS (NEW!) ==========
-    log_and_print_test("\n=== AGE CORRELATION BY DIAGNOSIS ===")
-    
-    age_corr_by_diagnosis = {}
-    if 'Age' in annotations_df.columns and 'Diagnosis' in annotations_df.columns:
-        for diagnosis in sorted(annotations_df['Diagnosis'].unique()):
-            mask = annotations_df['Diagnosis'] == diagnosis
-            n_samples = mask.sum()
-            
-            if n_samples >= 5:  # Mindestens 5 Samples für sinnvolle Korrelation
-                # Berechne Korrelation nur für diese Diagnose
-                diag_latents = latents[mask]
-                diag_ages = annotations_df.loc[mask, 'Age'].values
-                
-                # Max absolute correlation über alle Latent Dimensionen
-                age_corr_diag = np.abs(np.corrcoef(diag_latents.T, diag_ages)[:-1, -1]).max()
-                age_corr_by_diagnosis[diagnosis] = age_corr_diag
-                
-                log_and_print_test(f"  {diagnosis:10s} (n={n_samples:3d}): {age_corr_diag:.3f}")
-            else:
-                log_and_print_test(f"  {diagnosis:10s} (n={n_samples:3d}): skipped (too few samples)")
-        
-        # Interpretation
-        log_and_print_test("\nInterpretation:")
-        hc_corr = age_corr_by_diagnosis.get('HC', None)
-        
-        if hc_corr is not None:
-            if hc_corr < 0.2:
-                log_and_print_test(f"  ✓ HC age correlation low ({hc_corr:.3f}) - age confound removed")
-            else:
-                log_and_print_test(f"  ⚠️  HC age correlation high ({hc_corr:.3f}) - age confound NOT fully removed!")
-            
-            # Check patient groups
-            patient_diagnoses = [d for d in age_corr_by_diagnosis.keys() if d != 'HC']
-            if patient_diagnoses:
-                high_age_corr_patients = [d for d in patient_diagnoses if age_corr_by_diagnosis[d] > hc_corr + 0.1]
-                
-                if high_age_corr_patients:
-                    log_and_print_test(f"  ✓ Patients with higher age correlation than HC: {high_age_corr_patients}")
-                    log_and_print_test(f"    → Indicates pathological age-related changes (e.g., accelerated aging)")
-                else:
-                    log_and_print_test(f"  → No strong age-related pathological patterns detected")
-    
-    # ========== VISUALIZATIONS ==========
-    log_and_print_test("\nCreating UMAP visualizations...")
-    
-    # ... rest of the visualization code (unchanged) ...
-    
-    # ========== SAVE NUMERICAL RESULTS ==========
-    results = {
-        'silhouette_score': silhouette if 'silhouette' in locals() else np.nan,
-        'max_age_correlation_overall': age_corr if age_corr is not None else np.nan,
-        'max_sex_correlation': sex_corr if sex_corr is not None else np.nan,
-        'max_iqr_correlation': iqr_corr if iqr_corr is not None else np.nan,
-    }
-    
-    # Add per-diagnosis age correlations
-    if age_corr_by_diagnosis:
-        for diagnosis, corr_val in age_corr_by_diagnosis.items():
-            results[f'age_corr_{diagnosis}'] = corr_val
-    
-    pd.DataFrame([results]).to_csv(
-        f"{save_dir}/latent_analysis/latent_quality_metrics.csv",
-        index=False
-    )
-    log_and_print_test("\n✓ Saved latent quality metrics")
-    
-    log_and_print_test("="*80)
-    
-    return umap_embeddings, results
-
 def main(args):
     # ---------------------- INITIAL SETUP --------------------------------------------
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    default_model_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_..."
-    model_dir = args.model_dir if args.model_dir else default_model_dir
+    model_dir = args.model_dir
     
     if not os.path.exists(model_dir):
         raise FileNotFoundError(f"Model directory {model_dir} does not exist")
     
     model_name = os.path.basename(model_dir)
-    save_dir = f"{args.output_dir}/clinical_deviations_{model_name}_{timestamp}" if args.output_dir else f"./deviation_results_{model_name}_{timestamp}"
+    save_dir = f"{args.output_dir}/results_{model_name}_{timestamp}" if args.output_dir else f"./deviation_results_{model_name}_{timestamp}"
     
     os.makedirs(save_dir, exist_ok=True)
     os.makedirs(f"{save_dir}/figures", exist_ok=True)
@@ -436,18 +90,18 @@ def main(args):
     try:
         config_path = os.path.join(model_dir, "config.csv")
         config_df = pd.read_csv(config_path)
-        log_and_print_test(f"Loaded model configuration from {config_path}")
+        log_and_print_test(f"✓ Loaded model configuration from {config_path}")
         
         # Extract parameters
         atlas_name = config_df["ATLAS_NAME"].iloc[0]
-        if atlas_name.startswith('['):
+        if isinstance(atlas_name, str) and atlas_name.startswith('['):
             atlas_name = eval(atlas_name)
         
         latent_dim = int(config_df["LATENT_DIM"].iloc[0])
         norm_diagnosis = config_df["DIAGNOSES"].iloc[0] if "DIAGNOSES" in config_df.columns else args.norm_diagnosis
         volume_type = config_df["VOLUME_TYPE"].iloc[0] if "VOLUME_TYPE" in config_df.columns else ["Vgm", "T", "G"]
         
-        if volume_type.startswith('['):
+        if isinstance(volume_type, str) and volume_type.startswith('['):
             volume_type = eval(volume_type)
         if isinstance(volume_type, str):
             volume_type = [volume_type]
@@ -464,17 +118,13 @@ def main(args):
         recon_loss_weight = float(config_df["RECON_LOSS_WEIGHT"].iloc[0])
         contr_loss_weight = float(config_df["CONTR_LOSS_WEIGHT"].iloc[0])
         
-        TEST_CSV = config_df["TEST_CSV"].iloc[0] if "TEST_CSV" in config_df.columns else args.clinical_csv
-        mri_data_path = config_df["MRI_DATA_PATH"].iloc[0] if "MRI_DATA_PATH" in config_df.columns else "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
-        metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
-        
         # ========== LOAD CONDITIONING INFO ==========
         conditioning_info_path = os.path.join(model_dir, "conditioning_info.json")
         
         if os.path.exists(conditioning_info_path):
             with open(conditioning_info_path, 'r') as f:
                 conditioning_info = json.load(f)
-            log_and_print_test(f"✓ Loaded conditioning info from {conditioning_info_path}")
+            log_and_print_test(f"✓ Loaded conditioning info")
             log_and_print_test(f"  Condition dim: {conditioning_info['condition_dim']}")
             log_and_print_test(f"  Dataset categories: {conditioning_info['dataset_categories']}")
         else:
@@ -482,6 +132,26 @@ def main(args):
                 f"conditioning_info.json not found in {model_dir}!\n"
                 "Please re-run training with updated script."
             )
+        
+        # ========== LOAD TEST METADATA ==========
+        test_metadata_path = os.path.join(model_dir, "data", "test_metadata.csv")
+        
+        if not os.path.exists(test_metadata_path):
+            raise FileNotFoundError(f"Test metadata not found: {test_metadata_path}")
+        
+        test_metadata = pd.read_csv(test_metadata_path)
+        log_and_print_test(f"✓ Loaded test metadata: {len(test_metadata)} subjects")
+        
+        # ========== LOAD TRAINING METADATA (for IQR matching) ==========
+        training_metadata_path = os.path.join(model_dir, "data", "train_metadata.csv")
+        
+        if os.path.exists(training_metadata_path):
+            training_metadata = pd.read_csv(training_metadata_path)
+            log_and_print_test(f"✓ Loaded training metadata: {len(training_metadata)} subjects")
+        else:
+            log_and_print_test("⚠️  WARNING: Training metadata not found!")
+            log_and_print_test("    IQR-based dataset matching will not be available")
+            training_metadata = None
         
         hidden_dim_1 = 100
         hidden_dim_2 = 100
@@ -506,28 +176,29 @@ def main(args):
     if torch.cuda.is_available() and not args.no_cuda:
         torch.cuda.manual_seed_all(args.seed)
     
-    # ------------------------------------------ LOADING CLINICAL DATA --------------------------------------------
-    log_and_print_test("\n" + "="*80)
-    log_and_print_test("LOADING CLINICAL DATA")
-    log_and_print_test("="*80)
+    # ------------------------------------------ LOADING AND NORMALIZING TEST DATA --------------------------------------------
+    RAW_MRI_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
     
-    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_IQR_HC_separate_TEST.csv"
-    
-    subjects_dev, annotations_dev, roi_names = load_mri_data_2D_conditional(
-        normalized_csv_path=NORMALIZED_CSV,
-        csv_paths=[TEST_CSV],
-        diagnoses=None,  # All diagnoses
+    subjects_dev, annotations_dev, roi_names = load_and_normalize_test_data(
+        model_dir=model_dir,
+        raw_mri_csv=RAW_MRI_CSV,
+        test_metadata=test_metadata,
         atlas_name=atlas_name,
         volume_type=volume_type
     )
     
     clinical_data = extract_measurements(subjects_dev)
-    log_and_print_test(f"Clinical data shape: {clinical_data.shape}")
-    log_and_print_test(f"Subjects: {len(annotations_dev)}")
+    log_and_print_test(f"\n✓ Clinical data shape: {clinical_data.shape}")
+    log_and_print_test(f"✓ Subjects: {len(annotations_dev)}")
     
-    # ========== CREATE CONDITIONS TENSOR ==========
+    # Check diagnosis distribution
+    log_and_print_test(f"\nTest set composition:")
+    for diag, count in annotations_dev['Diagnosis'].value_counts().items():
+        log_and_print_test(f"  {diag}: {count}")
+    
+    # ========== CREATE CONDITIONS TENSOR WITH IQR MATCHING ==========
     log_and_print_test("\n" + "="*80)
-    log_and_print_test("CREATING CONDITIONS TENSOR")
+    log_and_print_test("CREATING CONDITIONS TENSOR WITH IQR-BASED DATASET MATCHING")
     log_and_print_test("="*80)
     
     required_cols = ['Age', 'Sex', 'IQR', 'Dataset']
@@ -535,9 +206,11 @@ def main(args):
     if missing_cols:
         raise ValueError(f"Missing required columns: {missing_cols}")
     
-    conditions_tensor = create_conditions_tensor_from_metadata(
+    conditions_tensor, dataset_mapping_df = create_conditions_tensor_from_metadata(
         metadata_df=annotations_dev,
-        conditioning_info=conditioning_info
+        conditioning_info=conditioning_info,
+        training_metadata=training_metadata,  # ← NEW!
+        match_unknown_datasets=True  # ← NEW!
     )
     
     if conditions_tensor.shape[1] != conditioning_info['condition_dim']:
@@ -548,6 +221,27 @@ def main(args):
         )
     
     log_and_print_test("✓ Conditions tensor created successfully")
+    
+    # ========== SAVE DATASET MAPPING ==========
+    mapping_file = os.path.join(save_dir, "dataset_mapping.csv")
+    dataset_mapping_df.to_csv(mapping_file, index=False)
+    log_and_print_test(f"\n✓ Saved dataset mapping to: {mapping_file}")
+    
+    # Print summary
+    if 'Match_Type' in dataset_mapping_df.columns:
+        log_and_print_test("\nDataset mapping summary:")
+        for match_type in dataset_mapping_df['Match_Type'].unique():
+            count = (dataset_mapping_df['Match_Type'] == match_type).sum()
+            log_and_print_test(f"  {match_type}: {count} subjects")
+        
+        if 'iqr_matched' in dataset_mapping_df['Match_Type'].values:
+            log_and_print_test("\nIQR-matched datasets:")
+            matched = dataset_mapping_df[dataset_mapping_df['Match_Type'] == 'iqr_matched']
+            for orig_ds in matched['Original_Dataset'].unique():
+                ds_data = matched[matched['Original_Dataset'] == orig_ds]
+                matched_ds = ds_data['Matched_Dataset'].iloc[0]
+                mean_dist = ds_data['Match_Distance'].mean()
+                log_and_print_test(f"  {orig_ds:15s} → {matched_ds:15s} (dist: {mean_dist:.3f})")
     
     # ------------------------------------------ LOADING MODELS --------------------------------------------
     log_and_print_test("\n" + "="*80)
@@ -626,7 +320,7 @@ def main(args):
         log_and_print_test("Using first bootstrap model as baseline")
 
     # ==================================================================================
-    # LATENT SPACE QUALITY ANALYSIS (NEW!)
+    # LATENT SPACE QUALITY ANALYSIS
     # ==================================================================================
 
     try:
@@ -644,40 +338,29 @@ def main(args):
         log_and_print_test(traceback.format_exc())
     
     # ==================================================================================
-    # PRE-TESTING DIAGNOSTICS
+    # PRE-TESTING DIAGNOSTICS (OPTIONAL - Skipped for now)
     # ==================================================================================
     
-    log_and_print_test("\n" + "="*80)
-    log_and_print_test("RUNNING PRE-TESTING DIAGNOSTICS")
-    log_and_print_test("="*80)
+    # log_and_print_test("\n" + "="*80)
+    # log_and_print_test("RUNNING PRE-TESTING DIAGNOSTICS")
+    # log_and_print_test("="*80)
     
-    try:
-        hc_mask = annotations_dev['Diagnosis'] == norm_diagnosis
-        
-        # Create HC test loader
-        hc_test_dataset = TensorDataset(
-            clinical_data[hc_mask],
-            conditions_tensor[hc_mask],
-            torch.zeros(hc_mask.sum())
-        )
-        hc_test_loader = DataLoader(hc_test_dataset, batch_size=32, shuffle=False)
-        
-        # Create patient test loader (e.g., MDD)
-        mdd_mask = annotations_dev['Diagnosis'] == 'MDD'
-        if mdd_mask.sum() > 0:
-            mdd_test_dataset = TensorDataset(
-                clinical_data[mdd_mask],
-                conditions_tensor[mdd_mask],
-                torch.ones(mdd_mask.sum())
-            )
-            mdd_test_loader = DataLoader(mdd_test_dataset, batch_size=32, shuffle=False)
-            
-            # NOTE: run_full_diagnostics needs to be updated for CVAE!
-            # For now, skip or create CVAE version
-            log_and_print_test("⚠️  Diagnostic analysis needs CVAE adaptation - skipping for now")
-            
-    except Exception as e:
-        log_and_print_test(f"⚠️  Could not complete diagnostics: {e}")
+    # try:
+    #     hc_mask = annotations_dev['Diagnosis'] == norm_diagnosis
+    #     
+    #     # Create HC test loader
+    #     hc_test_dataset = TensorDataset(
+    #         clinical_data[hc_mask],
+    #         conditions_tensor[hc_mask],
+    #         torch.zeros(hc_mask.sum())
+    #     )
+    #     hc_test_loader = DataLoader(hc_test_dataset, batch_size=32, shuffle=False)
+    #     
+    #     # NOTE: run_full_diagnostics needs to be updated for CVAE!
+    #     log_and_print_test("⚠️  Diagnostic analysis needs CVAE adaptation - skipping for now")
+    #     
+    # except Exception as e:
+    #     log_and_print_test(f"⚠️  Could not complete diagnostics: {e}")
     
     # ==================================================================================
     # COMBINED ANALYSIS - ALL FEATURES TOGETHER
@@ -695,6 +378,9 @@ def main(args):
         "CAT-SSD": "#A67DB8",
         "CAT-MDD": "#160C28"
     }
+    
+    metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
+    mri_data_path = RAW_MRI_CSV
     
     try:
         # [1] Bootstrap method
@@ -838,37 +524,37 @@ def main(args):
         import traceback
         log_and_print_test(traceback.format_exc())
     
-    # # ==================================================================================
-    # # PER-VOLUME-TYPE ANALYSIS
-    # # ==================================================================================
+    # ==================================================================================
+    # PER-VOLUME-TYPE ANALYSIS
+    # ==================================================================================
     
-    # if len(volume_type) > 1:
-    #     log_and_print_test("\n" + "="*80)
-    #     log_and_print_test("ANALYZING EACH VOLUME TYPE SEPARATELY")
-    #     log_and_print_test("="*80)
+    if len(volume_type) > 1:
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("ANALYZING EACH VOLUME TYPE SEPARATELY")
+        log_and_print_test("="*80)
         
-    #     for vtype in volume_type:
-    #         try:
-    #             analyze_volume_type_separately_cvae(
-    #                 vtype=vtype,
-    #                 bootstrap_models=bootstrap_models,
-    #                 clinical_data=clinical_data,
-    #                 conditions_tensor=conditions_tensor,
-    #                 annotations_df=annotations_dev,
-    #                 roi_names=roi_names,
-    #                 norm_diagnosis=norm_diagnosis,
-    #                 device=device,
-    #                 base_save_dir=save_dir,
-    #                 conditioning_info=conditioning_info,
-    #                 mri_data_path=mri_data_path,
-    #                 atlas_name=atlas_name,
-    #                 metadata_path=metadata_path,
-    #                 custom_colors=custom_colors
-    #             )
-    #         except Exception as e:
-    #             log_and_print_test(f"ERROR in {vtype} analysis: {e}")
-    #             import traceback
-    #             log_and_print_test(traceback.format_exc())
+        for vtype in volume_type:
+            try:
+                analyze_volume_type_separately_cvae(
+                    vtype=vtype,
+                    bootstrap_models=bootstrap_models,
+                    clinical_data=clinical_data,
+                    conditions_tensor=conditions_tensor,
+                    annotations_df=annotations_dev,
+                    roi_names=roi_names,
+                    norm_diagnosis=norm_diagnosis,
+                    device=device,
+                    base_save_dir=save_dir,
+                    conditioning_info=conditioning_info,
+                    mri_data_path=mri_data_path,
+                    atlas_name=atlas_name,
+                    metadata_path=metadata_path,
+                    custom_colors=custom_colors
+                )
+            except Exception as e:
+                log_and_print_test(f"ERROR in {vtype} analysis: {e}")
+                import traceback
+                log_and_print_test(traceback.format_exc())
     
     # ==================================================================================
     # LATENT SPACE VISUALIZATION
@@ -910,13 +596,16 @@ def main(args):
     log_and_print_test(f"    - deviation_scores_combined.csv (all 5 methods)")
     log_and_print_test(f"    - deviation_score_summary.csv")
     log_and_print_test(f"    - regional_effect_sizes_combined.csv")
-    log_and_print_test(f"  VOLUME-SPECIFIC ANALYSIS:")
-    for vtype in volume_type:
-        log_and_print_test(f"    - volume_type_{vtype}/")
+    log_and_print_test(f"    - dataset_mapping.csv (IQR-based matching)")
+    if len(volume_type) > 1:
+        log_and_print_test(f"  VOLUME-SPECIFIC ANALYSIS:")
+        for vtype in volume_type:
+            log_and_print_test(f"    - volume_type_{vtype}/")
     log_and_print_test(f"  VISUALIZATIONS:")
     log_and_print_test(f"    - figures/distributions/ (errorbar plots)")
     log_and_print_test(f"    - figures/latent_embeddings/ (UMAP)")
     log_and_print_test(f"    - figures/paper_style_*.png (regional effects)")
+    log_and_print_test(f"    - latent_analysis/ (quality metrics)")
     log_and_print_test("="*80)
     
     end_logging(Config_2D)
@@ -925,8 +614,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CVAE Deviation Analysis - Complete")
-    parser.add_argument("--model_dir", help="Path to CVAE model directory")
-    parser.add_argument("--clinical_csv", help="Path to clinical metadata CSV")
+    parser.add_argument("--model_dir", required=True, help="Path to CVAE model directory")
     parser.add_argument("--norm_diagnosis", type=str, default="HC")
     parser.add_argument("--max_models", type=int, default=0, help="Max models (0=all)")
     parser.add_argument("--output_dir", default=None)

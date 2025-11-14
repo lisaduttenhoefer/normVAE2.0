@@ -1472,3 +1472,204 @@ def normalize_and_scale_Pinaya(df: pd.DataFrame, ticv_column=None) -> pd.DataFra
     normalized_df = pd.DataFrame(normalized_data, index=df_copy.index)
 
     return normalized_df
+
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Tuple
+
+
+def identify_roi_columns(mri_data: pd.DataFrame, volume_types: List[str]) -> Dict[str, List[str]]:
+    """
+    Identify ROI columns for requested volume types.
+    
+    Args:
+        mri_data: MRI DataFrame
+        volume_types: List of volume types ['Vgm', 'T', etc.]
+    
+    Returns:
+        {'Vgm': [col1, col2, ...], 'T': [...]}
+    """
+    
+    roi_columns = {vtype: [] for vtype in volume_types}
+    
+    # Non-ROI columns to skip
+    skip_cols = [
+        'Filename', 'Dataset', 'IQR', 'NCR', 'ICR', 'res_RMS', 'TIV',
+        'GM_vol', 'WM_vol', 'CSF_vol', 'WMH_vol',
+        'mean_thickness_lh', 'mean_thickness_rh', 'mean_thickness_global',
+        'mean_gyri_lh', 'mean_gyri_rh', 'mean_gyri_global'
+    ]
+    
+    for col in mri_data.columns:
+        if col in skip_cols:
+            continue
+        
+        for vtype in volume_types:
+            if col.startswith(f'{vtype}_'):
+                roi_columns[vtype].append(col)
+                break
+    
+    return roi_columns
+
+
+def normalize_data_iqr(
+    mri_data: pd.DataFrame,
+    train_hc_filenames: List[str],
+    volume_types: List[str],
+    atlas_filter: List[str] = None
+) -> Tuple[pd.DataFrame, Dict]:
+    """
+    IQR-based robust normalization using training HC statistics.
+    
+    Args:
+        mri_data: Raw MRI data (complete dataset)
+        train_hc_filenames: List of training HC subject filenames
+        volume_types: Volume types to normalize ['Vgm', 'T', etc.]
+        atlas_filter: Optional atlas filter (e.g., ['DK40'])
+    
+    Returns:
+        normalized_mri_data: Normalized MRI data
+        normalization_stats: Dict with normalization statistics
+    """
+    
+    print("\n" + "="*80)
+    print("IQR-BASED NORMALIZATION (ON-THE-FLY)")
+    print("="*80)
+    
+    # Make a copy
+    normalized_data = mri_data.copy()
+    
+    # Identify ROI columns
+    roi_columns = identify_roi_columns(mri_data, volume_types)
+    
+    # Apply atlas filter if requested
+    if atlas_filter:
+        print(f"\nApplying atlas filter: {atlas_filter}")
+        for vtype in roi_columns:
+            roi_columns[vtype] = [
+                col for col in roi_columns[vtype]
+                if any(atlas in col for atlas in atlas_filter)
+            ]
+    
+    # Print summary
+    total_features = sum(len(cols) for cols in roi_columns.values())
+    print(f"\nFeatures to normalize: {total_features}")
+    for vtype, cols in roi_columns.items():
+        if cols:
+            print(f"  {vtype}: {len(cols)} features")
+    
+    # Get training HC data for calculating stats
+    print(f"\nCalculating normalization stats from {len(train_hc_filenames)} training HC subjects...")
+    train_hc_mask = normalized_data['Filename'].isin(train_hc_filenames)
+    train_hc_data = normalized_data[train_hc_mask]
+    
+    print(f"  Matched {train_hc_mask.sum()}/{len(train_hc_filenames)} HC subjects in MRI data")
+    
+    if train_hc_mask.sum() < len(train_hc_filenames) * 0.9:
+        print(f"  ⚠️  WARNING: Only matched {100*train_hc_mask.sum()/len(train_hc_filenames):.1f}% of HC subjects!")
+    
+    # Calculate stats and normalize per volume type
+    normalization_stats = {}
+    
+    for vtype, columns in roi_columns.items():
+        if not columns:
+            continue
+        
+        print(f"\nNormalizing {vtype}:")
+        
+        # Get HC data for this volume type
+        vtype_hc_data = train_hc_data[columns].copy()
+        
+        # TIV normalization (only for volumes)
+        if vtype in ['Vgm', 'Vwm', 'Vcsf'] and 'TIV' in train_hc_data.columns:
+            print(f"  - Applying TIV normalization")
+            tiv_hc = train_hc_data['TIV'].values.reshape(-1, 1)
+            vtype_hc_data = vtype_hc_data.div(tiv_hc, axis=0)
+            
+            # Also normalize all data
+            tiv_all = normalized_data['TIV'].values.reshape(-1, 1)
+            normalized_data[columns] = normalized_data[columns].div(tiv_all, axis=0)
+        
+        # Calculate MEDIAN and IQR from HC
+        medians = vtype_hc_data.median(axis=0)
+        q1 = vtype_hc_data.quantile(0.25, axis=0)
+        q3 = vtype_hc_data.quantile(0.75, axis=0)
+        iqr = q3 - q1
+        
+        # Handle zero/small IQR
+        iqr = iqr.replace(0, 1)
+        iqr = iqr.clip(lower=1e-6)
+        
+        # Store stats
+        normalization_stats[vtype] = {
+            'median': medians,
+            'iqr': iqr,
+            'q1': q1,
+            'q3': q3,
+            'columns': columns
+        }
+        
+        # Apply normalization: (x - median) / IQR
+        normalized_data[columns] = (normalized_data[columns] - medians) / iqr
+        
+        print(f"  ✓ Normalized {len(columns)} features")
+        print(f"    Median range: [{medians.min():.6f}, {medians.max():.6f}]")
+        print(f"    IQR range: [{iqr.min():.6f}, {iqr.max():.6f}]")
+        print(f"    Output range: [{normalized_data[columns].min().min():.3f}, {normalized_data[columns].max().max():.3f}]")
+    
+    print("\n✓ Normalization complete!")
+    
+    return normalized_data, normalization_stats
+
+
+def validate_normalization(
+    normalized_data: pd.DataFrame,
+    hc_filenames: List[str],
+    normalization_stats: Dict,
+    split_name: str = "Training"
+):
+    """Validate that HC subjects have ~0 median and ~1 IQR after normalization."""
+    
+    print(f"\n{'='*80}")
+    print(f"Validation: {split_name}-HC Normalization")
+    print(f"{'='*80}")
+    
+    hc_mask = normalized_data['Filename'].isin(hc_filenames)
+    hc_normalized = normalized_data[hc_mask]
+    
+    print(f"\nValidating {split_name}-HC (n={hc_mask.sum()}):")
+    print("Expected: Median ≈ 0, IQR ≈ 1\n")
+    
+    all_good = True
+    
+    for vtype, stats in normalization_stats.items():
+        columns = stats['columns']
+        vtype_data = hc_normalized[columns]
+        
+        median_of_medians = vtype_data.median().median()
+        q1 = vtype_data.quantile(0.25)
+        q3 = vtype_data.quantile(0.75)
+        iqr_of_iqrs = (q3 - q1).median()
+        
+        print(f"{vtype}:")
+        print(f"  Median: {median_of_medians:.6f} (should be ≈0)")
+        print(f"  IQR:    {iqr_of_iqrs:.6f} (should be ≈1)")
+        
+        if abs(median_of_medians) > 0.1:
+            print(f"  ⚠️  Median not close to 0!")
+            all_good = False
+        else:
+            print(f"  ✓ Median check passed")
+        
+        if abs(iqr_of_iqrs - 1) > 0.2:
+            print(f"  ⚠️  IQR not close to 1!")
+            all_good = False
+        else:
+            print(f"  ✓ IQR check passed")
+        
+        print()
+    
+    if all_good:
+        print(f"✅ ALL CHECKS PASSED!")
+    else:
+        print(f"⚠️  SOME CHECKS FAILED!")

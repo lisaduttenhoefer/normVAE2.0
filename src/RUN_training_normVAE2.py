@@ -105,7 +105,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     # Create output directory with normalization method in name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     if output_dir is None:
-        save_dir = f"/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_{norm_diagnosis}_{joined_volume_name}_{joined_atlas_name}_{normalization_method}_{timestamp}"
+        save_dir = f"/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/nVAE/TRAINING/norm_results_{norm_diagnosis}_{joined_volume_name}_{joined_atlas_name}_{normalization_method}_{timestamp}"
     else:
         save_dir = output_dir
         

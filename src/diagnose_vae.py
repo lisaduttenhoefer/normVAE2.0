@@ -581,31 +581,3 @@ def run_full_diagnostics(model, hc_loader, patient_loader,
     print(f"Outputs saved to: {save_dir}")
     
     return hc_results, patient_results
-
-
-# EXAMPLE USAGE
-if __name__ == "__main__":
-    """
-    Example of how to use this diagnostic tool
-    
-    You need to provide:
-    1. Your trained model
-    2. DataLoader for HC training data
-    3. DataLoader for patient test data
-    """
-    
-    # Placeholder - replace with your actual code
-    print("\nTo use this diagnostic tool, add the following to your code:\n")
-    print("""
-from diagnose_vae import run_full_diagnostics
-
-# After training your model:
-hc_results, patient_results = run_full_diagnostics(
-    model=your_trained_model,
-    hc_loader=your_hc_dataloader,
-    patient_loader=your_patient_dataloader,
-    hc_name="HC",
-    patient_name="MDD",
-    save_dir="./vae_diagnostics"
-)
-    """)

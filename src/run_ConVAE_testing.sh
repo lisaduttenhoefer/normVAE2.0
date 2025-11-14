@@ -25,7 +25,7 @@ echo ""
 
 # IMPORTANT: Update this path to your actual training results directory
 # Example: /net/data.isilon/.../norm_results_HC_Vgm_Vwm_Vcsf_G_T_all_20251022_1625
-MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_Vgm_T_G_neuromorphometrics_aparc_dk40_columnwise_20251111_1308"
+MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TRAINING/norm_results_HC_T_aparc_dk40_columnwise_20251112_1729"
 echo "=== Model Directory ==="
 echo "$MODEL_DIR"
 echo ""
@@ -34,7 +34,7 @@ export PYTHONUNBUFFERED=1
 
 python -u src/RUN_testing_CondVAE.py \
     --model_dir "$MODEL_DIR" \
-    --output_dir "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/TESTING" \
+    --output_dir "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/CVAE/TESTING" \
     --seed 42 &> logs/testing_output_${SLURM_JOB_ID}.log
      
 
