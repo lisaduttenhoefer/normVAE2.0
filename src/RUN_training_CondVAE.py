@@ -241,7 +241,7 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         mri_data=raw_mri_data,
         train_hc_filenames=train_hc_filenames,
         volume_types=config.VOLUME_TYPE,
-        atlas_filter=config.ATLAS_NAME if config.ATLAS_NAME != ["all"] else None
+        atlas_filter=None
     )
     
     # Validate normalization
@@ -461,8 +461,8 @@ if __name__ == "__main__":
     volume_type_arg = args.volume_type
     if len(volume_type_arg) == 1 and volume_type_arg[0] == "all":
         volume_type_arg = ["Vgm", "Vwm", "Vcsf", "G", "T"]
-    elif len(volume_type_arg) == 1:
-        volume_type_arg = volume_type_arg[0]
+    if isinstance(volume_type_arg, str):
+        volume_type_arg = [volume_type_arg]
     
     # Run the main function with parsed arguments
     save_dir, bootstrap_models, bootstrap_metrics = main(

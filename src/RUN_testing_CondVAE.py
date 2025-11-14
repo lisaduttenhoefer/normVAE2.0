@@ -525,38 +525,6 @@ def main(args):
         log_and_print_test(traceback.format_exc())
     
     # ==================================================================================
-    # PER-VOLUME-TYPE ANALYSIS
-    # ==================================================================================
-    
-    if len(volume_type) > 1:
-        log_and_print_test("\n" + "="*80)
-        log_and_print_test("ANALYZING EACH VOLUME TYPE SEPARATELY")
-        log_and_print_test("="*80)
-        
-        for vtype in volume_type:
-            try:
-                analyze_volume_type_separately_cvae(
-                    vtype=vtype,
-                    bootstrap_models=bootstrap_models,
-                    clinical_data=clinical_data,
-                    conditions_tensor=conditions_tensor,
-                    annotations_df=annotations_dev,
-                    roi_names=roi_names,
-                    norm_diagnosis=norm_diagnosis,
-                    device=device,
-                    base_save_dir=save_dir,
-                    conditioning_info=conditioning_info,
-                    mri_data_path=mri_data_path,
-                    atlas_name=atlas_name,
-                    metadata_path=metadata_path,
-                    custom_colors=custom_colors
-                )
-            except Exception as e:
-                log_and_print_test(f"ERROR in {vtype} analysis: {e}")
-                import traceback
-                log_and_print_test(traceback.format_exc())
-    
-    # ==================================================================================
     # LATENT SPACE VISUALIZATION
     # ==================================================================================
     
