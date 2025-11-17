@@ -58,7 +58,7 @@ class NormativeVAE_2D(nn.Module):
         recon_loss_weight,
         kldiv_loss_weight,
         contr_loss_weight,
-        beta=4.0,  # ← NEU: β-VAE Parameter (Standard: 4.0, für normalen VAE: 1.0)
+        beta=0.2,  # ← NEU: β-VAE Parameter (Standard: 4.0, für normalen VAE: 1.0)
         contr_temperature=0.1,
         input_dim:int = None, 
         hidden_dim_1=100, #based on Pinaya

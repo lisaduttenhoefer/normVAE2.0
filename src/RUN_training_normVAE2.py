@@ -91,18 +91,29 @@ def create_arg_parser():
 def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm_diagnosis: str, train_ratio: float, 
          batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, kl_warmup_epochs: int,
          no_cuda: bool, seed: int, normalization_method: str = 'rowwise', output_dir: str = None):
+    
     ## 0. Set Up ----------------------------------------------------------
-    # Set main paths
     path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata_no_bad_scans.csv"
     path_to_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training"
     
-    # Splits the metadata file with ALL Patients in a training and test set
-    TRAIN_CSV, TEST_CSV = split_df_adapt(path_original, path_to_dir, norm_diagnosis, train_ratio, seed)
+    # ========== FIX: Save splits and get paths ==========
+    train_df, test_df = split_df_adapt(
+        path_original=path_original,
+        path_to_dir=path_to_dir,
+        norm_diagnosis=norm_diagnosis,
+        train_ratio=train_ratio,
+        random_seed=seed,
+        save_splits=True  # ← Enable saving
+    )
+    
+    # Get paths to saved CSVs
+    TRAIN_CSV = f"{path_to_dir}/train_metadata_{norm_diagnosis}_{train_ratio}_seed{seed}.csv"
+    TEST_CSV = f"{path_to_dir}/test_metadata_{norm_diagnosis}_{train_ratio}_seed{seed}.csv"
     
     joined_atlas_name = "_".join(str(a) for a in atlas_name if isinstance(a, str))
     joined_volume_name = "_".join(str(a) for a in volume_type if isinstance(a, str))
     
-    # Create output directory with normalization method in name
+    # Create output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     if output_dir is None:
         save_dir = f"/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/nVAE/TRAINING/norm_results_{norm_diagnosis}_{joined_volume_name}_{joined_atlas_name}_{normalization_method}_{timestamp}"
@@ -119,25 +130,21 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
 
     config = Config_2D(
         RUN_NAME=f"NormativeVAE20_{joined_atlas_name}_{timestamp}_{norm_diagnosis}_{normalization_method}",
-        # Input / Output Paths
-        TRAIN_CSV=[TRAIN_CSV],
-        TEST_CSV=[TEST_CSV],
+        TRAIN_CSV=[TRAIN_CSV],  # ← Now it's a path string
+        TEST_CSV=[TEST_CSV],    # ← Now it's a path string
         MRI_DATA_PATH="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv",
         ATLAS_NAME=atlas_name,
         PROC_DATA_PATH="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/proc_extracted_xml_data",
         OUTPUT_DIR=save_dir,
         VOLUME_TYPE=volume_type,
         VALID_VOLUME_TYPES=["Vgm", "Vwm", "Vcsf", "G", "T"],
-        # Loading Model
         LOAD_MODEL=False,
         PRETRAIN_MODEL_PATH=None,
         PRETRAIN_METRICS_PATH=None,
         CONTINUE_FROM_EPOCH=0,
-        # Loss Parameters
         RECON_LOSS_WEIGHT=16.6449,
         KLDIV_LOSS_WEIGHT=kldiv_weight, 
         CONTR_LOSS_WEIGHT=0.0,
-        # Learning and Regularization
         TOTAL_EPOCHS=num_epochs,
         LEARNING_RATE=learning_rate,
         WEIGHT_DECAY=0.00356,
@@ -146,16 +153,13 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         SCHEDULE_ON_VALIDATION=True,
         SCHEDULER_PATIENCE=6,
         SCHEDULER_FACTOR=0.5,
-        # Visualization
         CHECKPOINT_INTERVAL=5,
         DONT_PLOT_N_EPOCHS=0,
         UMAP_NEIGHBORS=30,
         UMAP_DOT_SIZE=20,
         METRICS_ROLLING_WINDOW=10,
-        # Data Parameters
         BATCH_SIZE=batch_size,
         DIAGNOSES=norm_diagnosis,  
-        # Misc.
         LATENT_DIM=latent_dim,
         SHUFFLE_DATA=True,
         SEED=seed
@@ -168,16 +172,16 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_file = f"{save_dir}/logs/{timestamp}_normative_training.log"
     setup_logging(config)
     log_and_print(f"Starting normative modeling with atlas: {joined_atlas_name}, epochs: {num_epochs}, bootstraps: {n_bootstraps}")
-    log_and_print(f"Normalization method: {normalization_method}")  # NEW: Log normalization method
+    log_and_print(f"Normalization method: {normalization_method}")
 
     # Save configuration
     config_dict = vars(config)
-    config_dict['NORMALIZATION_METHOD'] = normalization_method  # NEW: Add to config
+    config_dict['NORMALIZATION_METHOD'] = normalization_method
     config_df = pd.DataFrame([config_dict])
     config_df.to_csv(f"{save_dir}/config.csv", index=False)
     log_and_print(f"Configuration saved to {save_dir}/config.csv")
 
-    # Set seed for reproducibility
+    # Set seed
     torch.manual_seed(config.SEED)
     np.random.seed(config.SEED)
     if torch.cuda.is_available() and not no_cuda:
@@ -191,18 +195,16 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     ## 1. Load Data --------------------------------
     log_and_print("Loading NORM control data...")
     
-    # ========== MODIFIED: Pass normalization_method parameter ==========
     NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC_separate_TRAIN.csv"
 
     subjects_train, train_overview, roi_names_train = load_mri_data_2D_prenormalized(
         normalized_csv_path=NORMALIZED_CSV,
-        csv_paths=[TRAIN_CSV],
+        csv_paths=[TRAIN_CSV],  # ← Now it's a STRING path! ✅
         diagnoses=["HC"],
         atlas_name=config.ATLAS_NAME,      
         volume_type=config.VOLUME_TYPE     
     )
     
-
     train_data_debug = extract_measurements(subjects_train)
     print(f"[DEBUG] Data shape: {train_data_debug.shape}")
     print(f"[DEBUG] Data min: {train_data_debug.min()}")
@@ -413,22 +415,25 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     return save_dir, bootstrap_models, bootstrap_metrics
 
 if __name__ == "__main__":
-    # Parse command line arguments
     parser = create_arg_parser()
     args = parser.parse_args()
 
     volume_type_arg = args.volume_type
+    
+    # ========== FIX: Keep as list! ==========
     if len(volume_type_arg) == 1 and volume_type_arg[0] == "all":
         volume_type_arg = ["Vgm", "Vwm", "Vcsf", "G", "T"]
-    elif len(volume_type_arg) == 1:
-        volume_type_arg = volume_type_arg[0]
     
-    # Run the main function with parsed arguments
+    # Ensure it's always a list
+    if isinstance(volume_type_arg, str):
+        volume_type_arg = [volume_type_arg]
+    
+    # Run the main function
     save_dir, bootstrap_models, bootstrap_metrics = main(
         atlas_name=args.atlas_name,
         num_epochs=args.num_epochs,
         norm_diagnosis=args.norm_diagnosis,
-        volume_type=volume_type_arg, 
+        volume_type=volume_type_arg,  # ← Always a list now
         train_ratio=args.train_ratio,
         n_bootstraps=args.n_bootstraps,
         batch_size=args.batch_size,
@@ -439,9 +444,8 @@ if __name__ == "__main__":
         save_models=args.save_models,
         no_cuda=args.no_cuda,
         seed=args.seed,
-        normalization_method=args.normalization_method,  # ← NEW PARAMETER!
+        normalization_method=args.normalization_method,
         output_dir=args.output_dir
     )
     
-    # Final log message
     print(f"Normative modeling complete. Results saved to {save_dir}")
