@@ -10,10 +10,12 @@ import seaborn as sns
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from scipy import stats
+import json
 
 from models.ContrastVAE_2D import NormativeVAE_2D  # ← VAE, not CVAE!
 from utils.support_f import extract_measurements
 from utils.config_utils_model import Config_2D
+from utils.cvae_utils import load_and_normalize_test_data
 from module.data_processing_hc import load_mri_data_2D_prenormalized
 
 from utils.logging_utils import (
@@ -45,6 +47,168 @@ from utils.dev_scores_utils import (
 )
 
 from diagnose_vae import run_full_diagnostics
+
+
+def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, harmonized_split_path,
+                               atlas_name, volume_type):
+    """
+    Load test data from pre-harmonized files.
+    
+    Args:
+        model_dir: Path to model directory
+        test_metadata: Test metadata DataFrame
+        harmonized_app_path: Path to harmonized application CSV
+        harmonized_split_path: Path to split info CSV
+        atlas_name: Atlas name(s) to filter
+        volume_type: Volume type(s) to filter
+    
+    Returns:
+        subjects_dev: List of subject dictionaries
+        annotations_dev: Test metadata DataFrame
+        roi_names: List of ROI names
+    """
+    log_and_print_test("\n" + "="*70)
+    log_and_print_test("LOADING PRE-HARMONIZED TEST DATA")
+    log_and_print_test("="*70)
+    
+    # Load harmonized application data
+    app_harm = pd.read_csv(harmonized_app_path, index_col='Filename')
+    split_info = pd.read_csv(harmonized_split_path)
+    
+    log_and_print_test(f"Loaded harmonized application data: {app_harm.shape}")
+    log_and_print_test(f"Split info: {split_info.shape}")
+    
+    # Get test HC filenames
+    test_hc_filenames = split_info[split_info['Split'] == 'test']['Filename'].tolist()
+    patient_filenames = split_info[split_info['Split'] == 'patient']['Filename'].tolist()
+    
+    log_and_print_test(f"Test HC samples: {len(test_hc_filenames)}")
+    log_and_print_test(f"Patient samples: {len(patient_filenames)}")
+    
+    # Combine test HC + patients
+    all_test_filenames = test_hc_filenames + patient_filenames
+    
+    # Filter to only filenames in test_metadata
+    requested_filenames = set(test_metadata['Filename'].tolist())
+    available_filenames = set(app_harm.index)
+    
+    valid_filenames = list(requested_filenames & available_filenames)
+    
+    log_and_print_test(f"Requested: {len(requested_filenames)}, Available: {len(available_filenames)}, Valid: {len(valid_filenames)}")
+    
+    if len(valid_filenames) == 0:
+        raise ValueError("No valid filenames found in harmonized data!")
+    
+    # Filter harmonized data
+    test_harm = app_harm.loc[valid_filenames]
+    
+    # Filter columns by atlas and volume type
+    atlas_mapping = {
+        'neuromorphometrics': 'Neurom',
+        'lpba40': 'lpba40',
+        'hammers': 'Hammers',
+        'aal3': 'AAL3',
+        'cobra': 'cobra',
+        'suit': 'SUIT',
+        'ibsr': 'IBSR',
+        'Schaefer_100': 'Sch100',
+        'Schaefer_200': 'Sch200',
+        'aparc_DKT40': 'DK40',
+        'aparc_dk40': 'DK40',  # ← ADD: lowercase variant
+        'aparc_a2009s': 'Destrieux'
+    }
+    
+    filtered_cols = []
+    for col in test_harm.columns:
+        parts = col.split('_', 2)
+        if len(parts) < 2:
+            continue
+        
+        col_volume = parts[0]
+        col_atlas = parts[1]
+        
+        vol_match = col_volume in volume_type
+        
+        atlas_match = False
+        if isinstance(atlas_name, list):
+            if "all" in atlas_name:
+                atlas_match = True
+            else:
+                for atlas in atlas_name:
+                    atlas_short = atlas_mapping.get(atlas.lower(), atlas)
+                    if col_atlas == atlas_short or atlas.lower() in col_atlas.lower():
+                        atlas_match = True
+                        break
+        else:
+            atlas_short = atlas_mapping.get(atlas_name.lower(), atlas_name)
+            atlas_match = col_atlas == atlas_short or atlas_name.lower() in col_atlas.lower() or atlas_name == "all"
+        
+        if atlas_match and vol_match:
+            filtered_cols.append(col)
+    
+    log_and_print_test(f"Filtered to {len(filtered_cols)} ROI columns")
+    log_and_print_test(f"Example columns: {filtered_cols[:5]}")
+    
+    if len(filtered_cols) == 0:
+        raise ValueError(f"No columns found matching atlas {atlas_name} and volume types {volume_type}!")
+    
+    test_harm = test_harm[filtered_cols]
+    
+    # ========== NORMALIZE HARMONIZED DATA WITH IQR ==========
+    log_and_print_test("\n[INFO] Applying IQR normalization to harmonized test data...")
+    
+    # Load normalization stats from training
+    norm_stats_path = f"{model_dir}/data/normalization_stats.pkl"
+    
+    if os.path.exists(norm_stats_path):
+        import pickle
+        with open(norm_stats_path, 'rb') as f:
+            norm_stats = pickle.load(f)
+        
+        log_and_print_test(f"✓ Loaded normalization stats from training")
+        
+        # Apply normalization using training stats
+        test_harm_df = test_harm.reset_index()  # Filename becomes column
+        
+        for col in filtered_cols:
+            if col in norm_stats:
+                median = norm_stats[col]['median']
+                iqr = norm_stats[col]['iqr']
+                
+                if iqr > 0:
+                    test_harm_df[col] = (test_harm_df[col] - median) / iqr
+                else:
+                    test_harm_df[col] = test_harm_df[col] - median
+        
+        log_and_print_test(f"✓ Normalized {len(filtered_cols)} ROI columns using training IQR statistics")
+        
+        # Update test_harm with normalized values
+        test_harm = test_harm_df.set_index('Filename')[filtered_cols]
+        
+    else:
+        log_and_print_test(f"⚠️ WARNING: No normalization stats found at {norm_stats_path}")
+        log_and_print_test(f"  Using harmonized data without additional normalization")
+    
+    # Create subjects list
+    subjects_dev = []
+    for filename in test_harm.index:
+        measurements = test_harm.loc[filename].values.astype(np.float32).tolist()
+        subjects_dev.append({
+            'name': filename,
+            'Filename': filename,
+            'measurements': measurements
+        })
+    
+    # Filter test_metadata to matched subjects
+    annotations_dev = test_metadata[test_metadata['Filename'].isin(valid_filenames)].copy()
+    annotations_dev = annotations_dev.reset_index(drop=True)
+    
+    log_and_print_test(f"\n✓ Created {len(subjects_dev)} test subjects")
+    log_and_print_test(f"✓ Metadata: {len(annotations_dev)} subjects")
+    
+    roi_names = filtered_cols
+    
+    return subjects_dev, annotations_dev, roi_names
 
 
 def main(args):
@@ -103,6 +267,13 @@ def main(args):
         kldiv_loss_weight = float(config_df["KLDIV_LOSS_WEIGHT"].iloc[0])
         recon_loss_weight = float(config_df["RECON_LOSS_WEIGHT"].iloc[0])
         
+        # ========== CHECK IF MODEL USED HARMONIZATION ==========
+        use_harmonized = config_df["USE_HARMONIZED"].iloc[0] if "USE_HARMONIZED" in config_df.columns else False
+        if isinstance(use_harmonized, str):
+            use_harmonized = use_harmonized.lower() in ['true', '1', 'yes']
+        
+        log_and_print_test(f"\nModel was trained with harmonization: {use_harmonized}")
+        
         TEST_CSV = config_df["TEST_CSV"].iloc[0] if "TEST_CSV" in config_df.columns else args.clinical_csv
         if TEST_CSV.startswith('['):
             TEST_CSV = eval(TEST_CSV)[0]
@@ -115,6 +286,7 @@ def main(args):
         log_and_print_test(f"  Volume types: {volume_type}")
         log_and_print_test(f"  Latent dim: {latent_dim}")
         log_and_print_test(f"  Normative diagnosis: {norm_diagnosis}")
+        log_and_print_test(f"  Used harmonization: {use_harmonized}")
         
     except (FileNotFoundError, KeyError) as e:
         log_and_print_test(f"ERROR: Could not load configuration: {e}")
@@ -134,25 +306,85 @@ def main(args):
     log_and_print_test("\n" + "="*80)
     log_and_print_test("LOADING TEST DATA")
     log_and_print_test("="*80)
+
+    # Parse TEST_CSV
+    TEST_CSV = config_df["TEST_CSV"].iloc[0] if "TEST_CSV" in config_df.columns else args.clinical_csv
+
+    if isinstance(TEST_CSV, str):
+        if TEST_CSV.startswith('[') and TEST_CSV.endswith(']'):
+            TEST_CSV = eval(TEST_CSV)[0]
+        TEST_CSV = TEST_CSV.strip("'\"")
+
+    if not os.path.exists(TEST_CSV):
+        raise FileNotFoundError(f"Test CSV not found: {TEST_CSV}")
+
+    test_metadata = pd.read_csv(TEST_CSV)
+    log_and_print_test(f"✓ Test metadata (HC only): {len(test_metadata)} subjects")
     
-    # Use PRE-NORMALIZED data
-    NORMALIZED_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training/CAT12_results_NORMALIZED_columnwise_HC_separate_TEST.csv"
+    # ========== ADD PATIENT DATA ==========
+    # The test_metadata from training only contains HC test samples
+    # We need to add patients for regional analysis
     
-    subjects_dev, annotations_dev, roi_names = load_mri_data_2D_prenormalized(
-        normalized_csv_path=NORMALIZED_CSV,
-        csv_paths=[TEST_CSV],  # ← STRING path, not DataFrame!
-        diagnoses=None,  # Load ALL diagnoses for testing
-        atlas_name=atlas_name,
-        volume_type=volume_type
-    )
+    log_and_print_test("\n[INFO] Loading patient data for regional analysis...")
     
+    full_metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+    full_metadata = pd.read_csv(full_metadata_path)
+    
+    # Get all patients (not HC)
+    patients = full_metadata[full_metadata['Diagnosis'].isin(['MDD', 'SSD', 'CAT', 'CAT-SSD', 'CAT-MDD'])].copy()
+    
+    log_and_print_test(f"  Found {len(patients)} patients:")
+    for diag in ['MDD', 'SSD', 'CAT', 'CAT-SSD', 'CAT-MDD']:
+        n = (patients['Diagnosis'] == diag).sum()
+        if n > 0:
+            log_and_print_test(f"    {diag}: {n}")
+    
+    # Combine HC test + patients
+    test_metadata = pd.concat([test_metadata, patients], ignore_index=True)
+    
+    log_and_print_test(f"\n✓ Combined test set: {len(test_metadata)} subjects total")
+    log_and_print_test(f"  Diagnosis distribution:")
+    for diag, count in sorted(test_metadata['Diagnosis'].value_counts().items()):
+        log_and_print_test(f"    {diag}: {count}")
+
+    # ========== BRANCH: Load harmonized OR normalized data ==========
+    
+    if use_harmonized:
+        # ========== OPTION A: Use harmonized test data ==========
+        log_and_print_test("\n🔬 Loading PRE-HARMONIZED test data")
+        
+        if args.harmonized_app_path is None or args.harmonized_split_path is None:
+            raise ValueError("Model was trained with harmonization, but --harmonized_app_path and --harmonized_split_path not provided!")
+        
+        subjects_dev, annotations_dev, roi_names = load_harmonized_test_data(
+            model_dir=model_dir,
+            test_metadata=test_metadata,
+            harmonized_app_path=args.harmonized_app_path,
+            harmonized_split_path=args.harmonized_split_path,
+            atlas_name=atlas_name,
+            volume_type=volume_type
+        )
+    else:
+        # ========== OPTION B: Use IQR normalized data ==========
+        log_and_print_test("\n📊 Loading IQR-NORMALIZED test data")
+        
+        RAW_MRI_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
+        
+        subjects_dev, annotations_dev, roi_names = load_and_normalize_test_data(
+            model_dir=model_dir,
+            raw_mri_csv=RAW_MRI_CSV,
+            test_metadata=test_metadata,
+            atlas_name=atlas_name,
+            volume_type=volume_type
+        )
+
     clinical_data = extract_measurements(subjects_dev)
-    log_and_print_test(f"\n✓ Clinical data shape: {clinical_data.shape}")
+
+    log_and_print_test(f"\n✓ Clinical data: {clinical_data.shape}")
     log_and_print_test(f"✓ Subjects: {len(annotations_dev)}")
-    
-    # Check diagnosis distribution
+
     log_and_print_test(f"\nTest set composition:")
-    for diag, count in annotations_dev['Diagnosis'].value_counts().items():
+    for diag, count in sorted(annotations_dev['Diagnosis'].value_counts().items()):
         log_and_print_test(f"  {diag}: {count}")
     
     # ------------------------------------------ LOADING MODELS --------------------------------------------
@@ -285,8 +517,15 @@ def main(args):
         "CAT-MDD": "#160C28"
     }
     
-    metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
+    metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+
+    # ========== CRITICAL: Use RAW MRI data for direction analysis ==========
+    # We need RAW values (not normalized/harmonized) to determine anatomical direction
+    # Even if model was trained with harmonization, we compare raw anatomical values
     mri_data_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
+    
+    log_and_print_test("\n[INFO] Regional analysis will use RAW MRI values to determine direction of changes")
+    log_and_print_test(f"[INFO] Raw MRI path: {mri_data_path}")
     
     try:
         # [1] Bootstrap method
@@ -465,6 +704,7 @@ def main(args):
     log_and_print_test(f"  - figures/distributions/ (errorbar plots)")
     log_and_print_test(f"  - figures/latent_embeddings/ (UMAP)")
     log_and_print_test(f"  - figures/paper_style_*.png (regional effects)")
+    log_and_print_test(f"\nNormalization used: {'Harmonized' if use_harmonized else 'IQR'}")
     log_and_print_test("="*80)
     
     end_logging(Config_2D)
@@ -480,6 +720,20 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", default=None)
     parser.add_argument("--no_cuda", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
+    
+    # ========== HARMONIZATION OPTIONS ==========
+    parser.add_argument(
+        '--harmonized_app_path',
+        type=str,
+        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU.csv',
+        help='Path to harmonized application data (only used if model was trained with harmonization)'
+    )
+    parser.add_argument(
+        '--harmonized_split_path',
+        type=str,
+        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/app_split_info_noNU.csv',
+        help='Path to split info (only used if model was trained with harmonization)'
+    )
     
     args = parser.parse_args()
     main(args)

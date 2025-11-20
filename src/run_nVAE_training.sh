@@ -28,9 +28,11 @@ export PYTHONUNBUFFERED=1
 
 # Alles nur ins training_output log
 python -u src/RUN_training_normVAE2.py \
-    --atlas_name neuromorphometrics \
-    --volume_type Vgm \
+    --atlas_name aparc_dk40 \
+    --volume_type G \
+    --use_harmonized \
     --kl_warmup_epochs 100 \
+    --kldiv_weight 0.5 \
     --latent_dim 40 \
     --num_epochs 300 \
     --n_bootstraps 50 \

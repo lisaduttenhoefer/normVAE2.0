@@ -178,10 +178,10 @@ class NormativeVAE_2D(nn.Module):
         if self.current_epoch < self.kl_warmup_epochs:
             # Linear warmup
             warmup_factor = self.current_epoch / self.kl_warmup_epochs
-            return warmup_factor * self.kldiv_loss_weight * 4.0
+            return warmup_factor * self.kldiv_loss_weight 
         else:
             # Full weight after warmup
-            return self.kldiv_loss_weight * 4.0
+            return self.kldiv_loss_weight 
             
     #Initialize weights for linear layers
     def _init_weights(self, module): 

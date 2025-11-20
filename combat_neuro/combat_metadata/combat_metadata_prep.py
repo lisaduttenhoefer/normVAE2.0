@@ -6,11 +6,11 @@ import numpy as np
 # ============================================================
 
 # Input files
-metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/metadata_combat.csv"
+metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
 tiv_iqr_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"  # ⭐ Enthält jetzt TIV UND IQR
-srpbs_hc_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/hc_SRPBS_covariates.csv"
-srpbs_pat_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/patient_SRPBS_covariates.csv"
-tcp_covariates_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/all_tcp_covariates.csv"
+srpbs_hc_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/covariates_franzi/hc_SRPBS_covariates.csv"
+srpbs_pat_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/covariates_franzi/patient_SRPBS_covariates.csv"
+tcp_covariates_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/covariates_franzi/all_tcp_covariates.csv"
 
 # Output files
 output_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro"
