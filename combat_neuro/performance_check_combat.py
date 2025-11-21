@@ -19,13 +19,15 @@ import seaborn as sns
 # PFADE ANPASSEN
 # ============================================================
 
+test_size = 50 
+
 # RAW DATA (vor Harmonization)
 roi_raw_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"  
 
 # HARMONIZED DATA (nach Harmonization) - NEUE DATEIEN
-roi_harm_hc_train_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized.csv"
+roi_harm_hc_train_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized_50.csv"
 # NEU: Kombinierte Application Datei (HC Test + Patienten ohne NU)
-roi_harm_app_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU.csv" 
+roi_harm_app_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU_50.csv" 
 
 # METADATA (Muss alle Probanden enthalten, wird später gefiltert)
 metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_metadata/metadata_for_harmonizing_all.csv"
@@ -34,7 +36,7 @@ metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/c
 EXCLUDED_SITES = ['NSS', 'EPSY', 'NU'] 
 
 # OUTPUT
-output_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/evaluation_plots"
+output_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/evaluation_plots_50"
 import os
 os.makedirs(output_dir, exist_ok=True)
 

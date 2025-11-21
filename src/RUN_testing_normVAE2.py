@@ -39,6 +39,7 @@ from utils.dev_scores_utils import (
     analyze_regional_deviations,
     visualize_embeddings_multiple,
     save_latent_visualizations,
+    plot_deviation_errorbar_improved,
     
     # Statistical helpers
     calculate_cliffs_delta,
@@ -589,7 +590,9 @@ def main(args):
         log_and_print_test("\n" + "="*80)
         log_and_print_test("CREATING VISUALIZATIONS")
         log_and_print_test("="*80)
-        
+
+        # Old version (for comparison)
+        log_and_print_test("[1/2] Creating original errorbar plots...")
         plot_all_deviation_metrics_errorbar(
             results_df=results_df,
             save_dir=save_dir,
@@ -597,6 +600,19 @@ def main(args):
             custom_colors=custom_colors,
             name="Combined_Analysis"
         )
+
+        # New version (with multiple testing correction) ✨
+        log_and_print_test("[2/2] Creating improved errorbar plots with FDR correction...")
+        plot_deviation_errorbar_improved(
+            results_df=results_df,
+            save_dir=save_dir,
+            norm_diagnosis=norm_diagnosis,
+            correction='fdr_bh',  # FDR correction
+            custom_colors=custom_colors,
+            name="Combined_Analysis"
+        )
+
+        log_and_print_test("✓ All visualizations created")
         
         # ========== SAVE RESULTS ==========
         results_file = os.path.join(save_dir, "deviation_scores_combined.csv")

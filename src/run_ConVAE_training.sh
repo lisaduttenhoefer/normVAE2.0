@@ -30,6 +30,7 @@ export PYTHONUNBUFFERED=1
 python -u src/RUN_training_CondVAE.py \
     --atlas_name aparc_dk40 neuromorphometrics \
     --volume_type G T Vgm \
+    --exclude_datasets NU \
     --num_epochs 300 \
     --n_bootstraps 50 \
     --beta 1.0 \

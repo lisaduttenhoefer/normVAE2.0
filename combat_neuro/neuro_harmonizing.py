@@ -123,7 +123,7 @@ print("STEP 7: TRAIN/TEST SPLIT")
 print("="*70)
 
 total_hc = len(hc_roi)
-test_size = 0.20
+test_size = 0.5
 
 train_idx, test_idx = train_test_split(
     range(len(hc_roi)),
@@ -231,7 +231,7 @@ model_smoothage, data_adj_train = harmonizationLearn(
 print("\n✓ Learned neuroHarmonize model!")
 
 # Save model
-model_path = f"{OUTPUT_DIR}/neuroharmonize_model_linearage_noNU.joblib" 
+model_path = f"{OUTPUT_DIR}/neuroharmonize_model_linearage_noNU_50.joblib" 
 joblib.dump(model_smoothage, model_path)
 print(f"✓ Saved model to: {model_path}")
 
@@ -268,7 +268,7 @@ hc_train_harm_df = pd.DataFrame(
     index=hc_filenames_train,
     columns=final_roi_columns # ⭐ FIX: Verwenden der Spalten des gefilterten Trainings-Sets
 )
-hc_train_harm_path = f"{OUTPUT_DIR}/hc_train_roi_harmonized.csv"
+hc_train_harm_path = f"{OUTPUT_DIR}/hc_train_roi_harmonized_50.csv"
 hc_train_harm_df.to_csv(hc_train_harm_path, index_label="Filename")
 
 # APPLICATION harmonized
@@ -277,7 +277,7 @@ app_harm_df = pd.DataFrame(
     index=app_filenames.values,
     columns=final_roi_columns # ⭐ FIX: Verwenden der Spalten des gefilterten Trainings-Sets
 )
-app_harm_path = f"{OUTPUT_DIR}/application_roi_harmonized_noNU.csv"
+app_harm_path = f"{OUTPUT_DIR}/application_roi_harmonized_noNU_50.csv"
 app_harm_df.to_csv(app_harm_path, index_label="Filename")
 
 # Split info
@@ -285,7 +285,7 @@ split_info = pd.DataFrame({
     'Filename': app_filenames.values,
     'Split': ['test'] * len(hc_filenames_test) + ['patient'] * len(pat_filenames)
 })
-split_path = f"{OUTPUT_DIR}/app_split_info_noNU.csv"
+split_path = f"{OUTPUT_DIR}/app_split_info_noNU_50.csv"
 split_info.to_csv(split_path, index=False)
 print(f"✓ Harmonization complete. Final data saved without NU.")
 

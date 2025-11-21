@@ -1673,3 +1673,196 @@ def validate_normalization(
         print(f"✅ ALL CHECKS PASSED!")
     else:
         print(f"⚠️  SOME CHECKS FAILED!")
+
+def load_harmonized_data(
+    harmonized_train_path,
+    harmonized_app_path,
+    harmonized_split_path,
+    atlas_name,
+    volume_type,
+    save_dir,
+    exclude_datasets=None,
+    metadata_path=None  # ← NEW PARAMETER!
+):
+    """
+    Load pre-harmonized data from neuroHarmonize
+    
+    Args:
+        exclude_datasets: List of datasets to exclude (e.g., ['EPSY', 'NSS'])
+        metadata_path: Path to metadata CSV with Dataset column (optional, will try default)
+    """
+    
+    log_and_print("\n" + "="*80)
+    log_and_print("LOADING HARMONIZED DATA")
+    log_and_print("="*80)
+    
+    # Load harmonized files
+    train_harm = pd.read_csv(harmonized_train_path, index_col='Filename')
+    app_harm = pd.read_csv(harmonized_app_path, index_col='Filename')
+    split_info = pd.read_csv(harmonized_split_path)
+    
+    log_and_print(f"Loaded harmonized training data: {train_harm.shape}")
+    log_and_print(f"Loaded harmonized application data: {app_harm.shape}")
+    log_and_print(f"Loaded split info: {len(split_info)} subjects")
+    
+    # ========== FILTER EXCLUDED DATASETS ==========
+    if exclude_datasets and len(exclude_datasets) > 0:
+        log_and_print(f"\n[INFO] Filtering harmonized data: excluding {exclude_datasets}")
+        
+        # ========== Load metadata to get Dataset info ==========
+        if metadata_path is None:
+            metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+            log_and_print(f"[INFO] Using default metadata path: {metadata_path}")
+        
+        metadata = pd.read_csv(metadata_path)
+        
+        if 'Dataset' not in metadata.columns:
+            log_and_print("⚠️  ERROR: 'Dataset' column not found in metadata!")
+            log_and_print(f"   Available columns: {metadata.columns.tolist()}")
+            log_and_print("   → Cannot filter by dataset, proceeding without filtering")
+        else:
+            log_and_print(f"[INFO] Loaded metadata: {len(metadata)} subjects")
+            log_and_print(f"[INFO] Metadata datasets: {metadata['Dataset'].unique()}")
+            
+            # ========== Merge Dataset info into split_info ==========
+            log_and_print("[INFO] Merging Dataset info into split_info...")
+            
+            split_info = split_info.merge(
+                metadata[['Filename', 'Dataset']],
+                on='Filename',
+                how='left'
+            )
+            
+            # Check for missing Dataset info
+            missing_dataset = split_info['Dataset'].isna().sum()
+            if missing_dataset > 0:
+                log_and_print(f"⚠️  WARNING: {missing_dataset} subjects have missing Dataset info")
+                log_and_print("   These subjects will be kept (not filtered)")
+            
+            # ========== Filter by dataset ==========
+            original_count = len(split_info)
+            
+            # Keep subjects that either:
+            # 1. Don't have Dataset info (NaN)
+            # 2. Have Dataset info but not in exclude list
+            split_info = split_info[
+                split_info['Dataset'].isna() | 
+                ~split_info['Dataset'].isin(exclude_datasets)
+            ]
+            
+            excluded_count = original_count - len(split_info)
+            
+            log_and_print(f"   Removed {excluded_count} subjects from split info")
+            log_and_print(f"   Remaining: {len(split_info)} subjects")
+            
+            # Show remaining datasets
+            if not split_info['Dataset'].isna().all():
+                log_and_print("\n   Remaining datasets:")
+                for ds, count in split_info['Dataset'].value_counts(dropna=False).items():
+                    if pd.isna(ds):
+                        log_and_print(f"     (Unknown): {count}")
+                    else:
+                        log_and_print(f"     {ds}: {count}")
+            
+            # ========== Filter harmonized data ==========
+            valid_filenames = split_info['Filename'].tolist()
+            
+            train_harm = train_harm[train_harm.index.isin(valid_filenames)]
+            app_harm = app_harm[app_harm.index.isin(valid_filenames)]
+            
+            log_and_print(f"\n   Filtered harmonized train data: {train_harm.shape}")
+            log_and_print(f"   Filtered harmonized app data: {app_harm.shape}")
+    
+    # ========== Filter columns by atlas and volume type ==========
+    atlas_mapping = {
+        'neuromorphometrics': 'Neurom',
+        'lpba40': 'lpba40',
+        'hammers': 'Hammers',
+        'aal3': 'AAL3',
+        'cobra': 'cobra',
+        'suit': 'SUIT',
+        'ibsr': 'IBSR',
+        'Schaefer_100': 'Sch100',
+        'Schaefer_200': 'Sch200',
+        'aparc_DKT40': 'DK40',
+        'aparc_dk40': 'DK40',
+        'aparc_a2009s': 'Destrieux'
+    }
+    
+    # Get all columns from both train and app
+    all_columns = list(set(train_harm.columns) | set(app_harm.columns))
+    
+    filtered_cols = []
+    for col in all_columns:
+        parts = col.split('_', 2)
+        if len(parts) < 2:
+            continue
+        
+        col_volume = parts[0]
+        col_atlas = parts[1]
+        
+        # Check volume type match
+        vol_match = col_volume in volume_type
+        
+        # Check atlas match
+        atlas_match = False
+        if isinstance(atlas_name, list):
+            if "all" in atlas_name:
+                atlas_match = True
+            else:
+                for atlas in atlas_name:
+                    atlas_short = atlas_mapping.get(atlas.lower(), atlas)
+                    if col_atlas == atlas_short or atlas.lower() in col_atlas.lower():
+                        atlas_match = True
+                        break
+        else:
+            atlas_short = atlas_mapping.get(atlas_name.lower(), atlas_name)
+            atlas_match = col_atlas == atlas_short or atlas_name.lower() in col_atlas.lower() or atlas_name == "all"
+        
+        if atlas_match and vol_match:
+            filtered_cols.append(col)
+    
+    log_and_print(f"\nFiltered to {len(filtered_cols)} ROI columns")
+    log_and_print(f"Example columns: {filtered_cols[:5]}")
+    
+    if len(filtered_cols) == 0:
+        raise ValueError(f"No columns found matching atlas {atlas_name} and volume types {volume_type}!")
+    
+    # Filter both dataframes
+    train_harm = train_harm[[col for col in filtered_cols if col in train_harm.columns]]
+    app_harm = app_harm[[col for col in filtered_cols if col in app_harm.columns]]
+    
+    # ========== Create train/test split from split_info ==========
+    train_filenames = split_info[split_info['Split'] == 'train']['Filename'].tolist()
+    test_filenames = split_info[split_info['Split'] == 'test']['Filename'].tolist()
+    
+    log_and_print(f"\n✓ Train subjects: {len(train_filenames)}")
+    log_and_print(f"✓ Test subjects: {len(test_filenames)}")
+    
+    # ========== Create metadata DataFrames ==========
+    # Load full metadata again
+    if metadata_path is None:
+        metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+    
+    metadata_full = pd.read_csv(metadata_path)
+    
+    train_metadata = metadata_full[metadata_full['Filename'].isin(train_filenames)].copy()
+    test_metadata = metadata_full[metadata_full['Filename'].isin(test_filenames)].copy()
+    
+    # ========== Save filtered and split data ==========
+    os.makedirs(f"{save_dir}/data", exist_ok=True)
+    
+    # Combine train + app harmonized data
+    combined_harm = pd.concat([train_harm, app_harm])
+    normalized_csv_path = f"{save_dir}/data/harmonized_data_combined.csv"
+    combined_harm.to_csv(normalized_csv_path)
+    
+    # Save metadata
+    train_metadata.to_csv(f"{save_dir}/data/train_metadata_harmonized.csv", index=False)
+    test_metadata.to_csv(f"{save_dir}/data/test_metadata_harmonized.csv", index=False)
+    
+    log_and_print(f"\n✓ Saved harmonized data: {normalized_csv_path}")
+    log_and_print(f"✓ Train metadata: {len(train_metadata)} subjects")
+    log_and_print(f"✓ Test metadata: {len(test_metadata)} subjects")
+    
+    return combined_harm, train_metadata, test_metadata, normalized_csv_path

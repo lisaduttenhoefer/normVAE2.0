@@ -89,21 +89,17 @@ def create_arg_parser():
     parser.add_argument('--output_dir', help='Override default output directory', default=None)
     parser.add_argument('--contr_loss_weight', type=float, default=0.1, help='Weight for contrastive loss on age bins')
     parser.add_argument('--n_age_bins', type=int, default=0,help='Number of age bins for contrastive loss')
-    # ========== NEW PARAMETER ==========
-    parser.add_argument(
-        '--normalization_method',
-        type=str,
-        default='rowwise',
-        choices=['rowwise', 'columnwise'],
-        help="Normalization method: 'rowwise' (Pinaya approach) or 'columnwise' (classical neuroimaging)"
-    )
+    parser.add_argument('--normalization_method', type=str, default='rowwise', choices=['rowwise', 'columnwise'], help="Normalization method: 'rowwise' (Pinaya approach) or 'columnwise' (classical neuroimaging)")
+    # ========== Dataset exclusion ==========
+    parser.add_argument('--exclude_datasets', nargs='*', default=[], help='Datasets to exclude from training (e.g., EPSY NSS). Empty list = include all with IQR matching')
+    parser.add_argument('--exclude_mode', type=str, choices=['strict', 'soft'], default='strict', help='strict: completely remove from data. soft: exclude from IQR matching but keep data')
     return parser
 
 
 def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm_diagnosis: str, train_ratio: float, 
          batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, 
          kl_warmup_epochs: int, beta: float, dropout: float, no_cuda: bool, seed: int, 
-         contr_loss_weight: float, n_age_bins: int, normalization_method: str = 'rowwise', output_dir: str = None):
+         contr_loss_weight: float, n_age_bins: int, normalization_method: str = 'rowwise', output_dir: str = None, exclude_datasets=None, exclude_mode: str = None):
     
     ## 0. Set Up ----------------------------------------------------------
     path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
@@ -203,18 +199,49 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_and_print("\n" + "="*80)
     log_and_print("STEP 1: Splitting Metadata")
     log_and_print("="*80)
-    
+
+    # ========== FILTER DATASETS BEFORE SPLIT ==========
+    metadata = pd.read_csv(path_original)
+
+    if exclude_datasets:
+        log_and_print(f"\n⚠️  EXCLUDING DATASETS: {exclude_datasets}")
+        log_and_print(f"   Exclusion mode: {exclude_mode}")
+        
+        original_count = len(metadata)
+        
+        if exclude_mode == 'strict':
+            # Complete removal from training data
+            metadata = metadata[~metadata['Dataset'].isin(exclude_datasets)]
+            log_and_print(f"   Strict mode: Removed {original_count - len(metadata)} subjects")
+            log_and_print(f"   Remaining: {len(metadata)} subjects")
+        
+        else:  # soft mode
+            # Mark for exclusion from IQR matching but keep in data
+            metadata['_exclude_from_iqr'] = metadata['Dataset'].isin(exclude_datasets)
+            excluded_count = metadata['_exclude_from_iqr'].sum()
+            log_and_print(f"   Soft mode: Marked {excluded_count} subjects for IQR exclusion")
+            log_and_print(f"   (Will be matched to nearest training dataset)")
+        
+        # Show remaining dataset distribution
+        log_and_print("\n   Remaining datasets after exclusion:")
+        for ds, count in metadata['Dataset'].value_counts().items():
+            log_and_print(f"     {ds}: {count}")
+
+    # Save filtered metadata temporarily
+    temp_filtered_path = f"{save_dir}/data/temp_filtered_metadata.csv"
+    metadata.to_csv(temp_filtered_path, index=False)
+
+    # Now split this filtered data
     train_metadata, test_metadata = split_df_adapt(
-        path_original=path_original,
+        path_original=temp_filtered_path,  # ← Use filtered!
         path_to_dir=path_to_dir,
         norm_diagnosis=norm_diagnosis,
         train_ratio=train_ratio,
         random_seed=seed,
         save_splits=True
     )
-    
+
     log_and_print(f"✓ Split: {len(train_metadata)} train, {len(test_metadata)} test")
-    
     # Save for documentation
     train_metadata.to_csv(f"{save_dir}/data/train_metadata.csv", index=False)
     test_metadata.to_csv(f"{save_dir}/data/test_metadata.csv", index=False)
@@ -485,7 +512,9 @@ if __name__ == "__main__":
         beta=args.beta,  
         dropout=args.dropout,
         contr_loss_weight=args.contr_loss_weight,  # ← ADD THIS
-        n_age_bins=args.n_age_bins  # ← ADD THIS
+        n_age_bins=args.n_age_bins,  # ← ADD THIS
+        exclude_datasets=args.exclude_datasets,
+        exclude_mode=args.exclude_mode
     )
     
     # Final log message

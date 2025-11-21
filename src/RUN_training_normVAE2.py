@@ -19,33 +19,27 @@ import torchio as tio
 from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-
-from diagnose_vae import run_full_diagnostics
-
-
 matplotlib.use("Agg")
-
 
 from models.ContrastVAE_2D import (
     NormativeVAE_2D, 
     train_normative_model_plots,
     bootstrap_train_normative_models_plots
 )
-
+from diagnose_vae import run_full_diagnostics
 from utils.support_f import (
     split_df_adapt,
     extract_measurements
 )
 from utils.config_utils_model import Config_2D
-
 from module.data_processing_hc import (
     load_checkpoint_model, 
     load_mri_data_2D_prenormalized,
     process_subjects, 
     train_val_split_annotations,
-    train_val_split_subjects
+    train_val_split_subjects,
+    load_harmonized_data
 )
-    
 from utils.logging_utils import (
     log_and_print,
     log_data_loading,
@@ -54,271 +48,74 @@ from utils.logging_utils import (
     setup_logging,
     log_atlas_mode
 )
-
 from utils.plotting_utils import (
     plot_learning_curves,
     plot_bootstrap_metrics,
 )
 
+test_split = 0.5 
+
 def create_arg_parser():
     parser = argparse.ArgumentParser(description='Arguments for Normative Modeling Training')
+    # ========== MAIN PARAMETERS ==========
     parser.add_argument('--atlas_name', help='Name of the desired atlas for training.',  nargs='+', default=["all"])
     parser.add_argument('--volume_type', help='Volume type(s) to use', nargs='*', default=["Vgm", "Vwm", "Vcsf"])
     parser.add_argument('--num_epochs', help='Number of epochs to be trained for', type=int, default=250)
     parser.add_argument('--n_bootstraps', help='Number of bootstrap samples', type=int, default=80)
-    parser.add_argument('--kl_warmup_epochs', type=int, default=50, help='Number of epochs for KL warmup')
     parser.add_argument('--norm_diagnosis', help='which diagnosis is considered the "norm"', type=str, default="HC")
     parser.add_argument('--train_ratio', help='Normpslit ratio', type=float, default=0.7)
+    parser.add_argument('--exclude_datasets',nargs='*',default=[],help='Datasets to exclude')
+    # ========== MODEL PARAMETERS ==========
     parser.add_argument('--batch_size', help='Batch size', type=int, default=32)
     parser.add_argument('--learning_rate', help='Learning rate', type=float, default=0.000559)
     parser.add_argument('--latent_dim', help='Dimension of latent space', type=int, default=20) 
     parser.add_argument('--kldiv_weight', help='Weight for KL divergence loss', type=float, default=1.2)
+    parser.add_argument('--kl_warmup_epochs', type=int, default=50, help='Number of epochs for KL warmup')
+    # ==========  BASIC PARAMETERS ==========
     parser.add_argument('--save_models', help='Save all bootstrap models', action='store_true', default=True)
     parser.add_argument('--no_cuda', help='Disable CUDA (use CPU only)', action='store_true')
     parser.add_argument('--seed', help='Random seed for reproducibility', type=int, default=42)
     parser.add_argument('--output_dir', help='Override default output directory', default=None)
-    # ========== NEW PARAMETER ==========
-    parser.add_argument(
-        '--normalization_method',
-        type=str,
-        default='rowwise',
-        choices=['rowwise', 'columnwise'],
-        help="Normalization method: 'rowwise' (Pinaya approach) or 'columnwise' (classical neuroimaging)"
-    )
+    parser.add_argument('--normalization_method',type=str, default='rowwise', choices=['rowwise', 'columnwise'], help="Normalization method: 'rowwise' (Pinaya approach) or 'columnwise' (classical neuroimaging)")
     # ========== HARMONIZATION OPTION ==========
-    parser.add_argument(
-        '--use_harmonized',
-        action='store_true',
-        help='Use pre-harmonized data from neuroHarmonize instead of IQR normalization'
-    )
-    parser.add_argument(
-        '--harmonized_train_path',
-        type=str,
-        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized.csv',
-        help='Path to harmonized training data'
-    )
-    parser.add_argument(
-        '--harmonized_app_path',
-        type=str,
-        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU.csv',
-        help='Path to harmonized application data (test HC + patients)'
-    )
-    parser.add_argument(
-        '--harmonized_split_path',
-        type=str,
-        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/app_split_info_noNU.csv',
-        help='Path to split info (which samples are test vs patient)'
-    )
+    parser.add_argument('--use_harmonized', action='store_true', help='Use pre-harmonized data from neuroHarmonize instead of IQR normalization')
+    parser.add_argument('--harmonized_train_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized_50.csv', help='Path to harmonized training data')
+    parser.add_argument('--harmonized_app_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU_50.csv', help='Path to harmonized application data (test HC + patients)')
+    parser.add_argument('--harmonized_split_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/app_split_info_noNU_50.csv', help='Path to split info (which samples are test vs patient)')
     return parser
-
-
-def load_harmonized_data(harmonized_train_path, harmonized_app_path, harmonized_split_path,
-                        atlas_name, volume_type, save_dir):
-    """
-    Load pre-harmonized data and create metadata compatible with existing pipeline.
-    
-    Returns:
-        normalized_mri_data: Combined DataFrame with all harmonized data
-        train_metadata: Metadata for training samples
-        test_metadata: Metadata for test samples (HC test only)
-    """
-    log_and_print("\n" + "="*70)
-    log_and_print("LOADING PRE-HARMONIZED DATA")
-    log_and_print("="*70)
-    
-    # Load harmonized ROI data
-    hc_train_harm = pd.read_csv(harmonized_train_path, index_col='Filename')
-    app_harm = pd.read_csv(harmonized_app_path, index_col='Filename')
-    split_info = pd.read_csv(harmonized_split_path)
-    
-    log_and_print(f"Loaded HC train: {hc_train_harm.shape}")
-    log_and_print(f"Loaded application: {app_harm.shape}")
-    log_and_print(f"Split info: {split_info.shape}")
-    
-    # Get test HC filenames from split info
-    test_hc_filenames = split_info[split_info['Split'] == 'test']['Filename'].tolist()
-    
-    # Extract HC test data from application set
-    hc_test_harm = app_harm.loc[test_hc_filenames]
-    
-    log_and_print(f"HC test samples: {len(test_hc_filenames)}")
-    
-    # Filter columns by atlas and volume type
-    # Harmonized columns are formatted as: Vgm_Neurom_RightPallidum (Volume_Atlas_ROI)
-    filtered_cols = []
-    
-    # Create atlas mapping for short names
-    atlas_mapping = {
-        'neuromorphometrics': 'Neurom',
-        'lpba40': 'lpba40',
-        'hammers': 'Hammers',
-        'aal3': 'AAL3',
-        'cobra': 'cobra',
-        'suit': 'SUIT',
-        'ibsr': 'IBSR',
-        'Schaefer_100': 'Sch100',
-        'Schaefer_200': 'Sch200',
-        'aparc_DKT40': 'DK40',
-        'aparc_dk40': 'DK40',  # ← ADD: lowercase variant
-        'aparc_a2009s': 'Destrieux'
-    }
-    
-    for col in hc_train_harm.columns:
-        # Parse column format: Volume_Atlas_ROI
-        parts = col.split('_', 2)  # Split into max 3 parts
-        if len(parts) < 2:
-            continue
-            
-        col_volume = parts[0]  # e.g., "Vgm", "T", "G"
-        col_atlas = parts[1]   # e.g., "Neurom", "lpba40"
-        
-        # Check if column matches volume type
-        vol_match = col_volume in volume_type
-        
-        # Check if column matches atlas
-        atlas_match = False
-        if isinstance(atlas_name, list):
-            if "all" in atlas_name:
-                atlas_match = True
-            else:
-                # Check both full names and short names
-                for atlas in atlas_name:
-                    atlas_short = atlas_mapping.get(atlas.lower(), atlas)
-                    if col_atlas == atlas_short or atlas.lower() in col_atlas.lower():
-                        atlas_match = True
-                        break
-        else:
-            atlas_short = atlas_mapping.get(atlas_name.lower(), atlas_name)
-            atlas_match = col_atlas == atlas_short or atlas_name.lower() in col_atlas.lower() or atlas_name == "all"
-        
-        if atlas_match and vol_match:
-            filtered_cols.append(col)
-    
-    log_and_print(f"Filtered to {len(filtered_cols)} ROI columns matching atlas and volume criteria")
-    log_and_print(f"Example columns: {filtered_cols[:5]}")
-    
-    if len(filtered_cols) == 0:
-        raise ValueError(f"No columns found matching atlas {atlas_name} and volume types {volume_type}!")
-    
-    # Filter all datasets - KEEP ORIGINAL HARMONIZED FORMAT (Vgm_Neurom_ROI)
-    hc_train_harm = hc_train_harm[filtered_cols]
-    hc_test_harm = hc_test_harm[filtered_cols]
-    
-    log_and_print(f"✓ Kept harmonized column format (Volume_Atlas_ROI)")
-    
-    # ========== NORMALIZE HARMONIZED DATA WITH IQR ==========
-    log_and_print("\n[INFO] Applying IQR normalization to harmonized data...")
-    log_and_print("  (Harmonization removes site effects, IQR normalizes scale)")
-    
-    # Get train HC filenames for normalization reference
-    train_hc_filenames = hc_train_harm.index.tolist()
-    
-    # Combine train and test for unified normalization
-    combined_harm = pd.concat([hc_train_harm, hc_test_harm])
-    combined_harm.reset_index(inplace=True)  # Filename becomes column
-    
-    # Compute IQR normalization stats from train HC
-    normalization_stats = {}
-    
-    for col in filtered_cols:
-        # Get train HC values for this ROI
-        train_hc_values = hc_train_harm[col].values
-        
-        # Calculate IQR stats
-        q1 = np.percentile(train_hc_values, 25)
-        q3 = np.percentile(train_hc_values, 75)
-        iqr = q3 - q1
-        median = np.median(train_hc_values)
-        
-        normalization_stats[col] = {
-            'median': median,
-            'iqr': iqr,
-            'q1': q1,
-            'q3': q3
-        }
-        
-        # Normalize using train HC stats
-        if iqr > 0:
-            combined_harm[col] = (combined_harm[col] - median) / iqr
-        else:
-            log_and_print(f"  WARNING: Zero IQR for {col}, using median centering only")
-            combined_harm[col] = combined_harm[col] - median
-    
-    log_and_print(f"✓ Normalized {len(filtered_cols)} harmonized ROI columns using train HC IQR")
-    log_and_print(f"  Reference: {len(train_hc_filenames)} train HC subjects")
-    
-    # Save normalization stats
-    import pickle
-    norm_stats_path = f"{save_dir}/data/normalization_stats.pkl"
-    with open(norm_stats_path, 'wb') as f:
-        pickle.dump(normalization_stats, f)
-    log_and_print(f"✓ Saved normalization stats to: {norm_stats_path}")
-    
-    # Load original metadata to get Age, Sex, Dataset, etc.
-    original_metadata = pd.read_csv("/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv")
-    
-    # Merge with metadata (keep only HC)
-    combined_with_meta = combined_harm.merge(
-        original_metadata[original_metadata['Diagnosis'] == 'HC'][['Filename', 'Age', 'Sex', 'Dataset', 'Diagnosis']],
-        on='Filename',
-        how='left'
-    )
-    
-    # Check and handle missing metadata
-    missing_meta = combined_with_meta[combined_with_meta['Age'].isnull()]
-    if len(missing_meta) > 0:
-        log_and_print(f"⚠️ WARNING: {len(missing_meta)} samples missing metadata - removing them")
-        log_and_print(f"  Missing samples: {missing_meta['Filename'].tolist()[:10]}...")
-        
-        # Remove samples without metadata
-        combined_with_meta = combined_with_meta.dropna(subset=['Age', 'Sex', 'Dataset'])
-        log_and_print(f"  Kept {len(combined_with_meta)} samples with complete metadata")
-    
-    # Get original train/test filenames from harmonized data indices
-    train_filenames = hc_train_harm.index.tolist()
-    test_filenames = hc_test_harm.index.tolist()
-    
-    # Update train/test filenames to only include samples with metadata
-    valid_filenames = set(combined_with_meta['Filename'])
-    train_filenames = [f for f in train_filenames if f in valid_filenames]
-    test_filenames = [f for f in test_filenames if f in valid_filenames]
-    
-    log_and_print(f"Valid train samples after metadata filtering: {len(train_filenames)}")
-    log_and_print(f"Valid test samples after metadata filtering: {len(test_filenames)}")
-    
-    # Create train and test metadata
-    train_metadata = combined_with_meta[combined_with_meta['Filename'].isin(train_filenames)].copy()
-    test_metadata = combined_with_meta[combined_with_meta['Filename'].isin(test_filenames)].copy()
-    
-    log_and_print(f"\n✓ Created train metadata: {train_metadata.shape}")
-    log_and_print(f"✓ Created test metadata: {test_metadata.shape}")
-    
-    # Save combined harmonized data as "normalized MRI data"
-    normalized_csv_path = f"{save_dir}/data/harmonized_mri_data.csv"
-    combined_with_meta.to_csv(normalized_csv_path, index=False)
-    
-    # Save train/test metadata
-    train_metadata.to_csv(f"{save_dir}/data/train_metadata_harmonized.csv", index=False)
-    test_metadata.to_csv(f"{save_dir}/data/test_metadata_harmonized.csv", index=False)
-    
-    log_and_print(f"✓ Saved harmonized data to: {normalized_csv_path}")
-    
-    return combined_with_meta, train_metadata, test_metadata, normalized_csv_path
 
 
 def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm_diagnosis: str, train_ratio: float, 
          batch_size: int, learning_rate: float, latent_dim: int, kldiv_weight: float, save_models: bool, kl_warmup_epochs: int,
          no_cuda: bool, seed: int, normalization_method: str = 'rowwise', output_dir: str = None,
          use_harmonized: bool = False, harmonized_train_path: str = None, harmonized_app_path: str = None, 
-         harmonized_split_path: str = None):
+         harmonized_split_path: str = None, exclude_datasets=None):
     
     ## 0. Set Up ----------------------------------------------------------
-    path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata_no_bad_scans.csv"
+    path_original = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
     path_to_dir = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/data_training"
-    
-    # ========== NEW: Use RAW MRI data ==========
+    # ==========Filter datasets in case of exlude_dataset parameter is not None ==========
+    if exclude_datasets and len(exclude_datasets) > 0:
+        log_and_print(f"\n[INFO] Excluding datasets: {exclude_datasets}")
+        
+        # Load and filter metadata
+        full_metadata = pd.read_csv(path_original)
+        filtered_metadata = full_metadata[~full_metadata['Dataset'].isin(exclude_datasets)]
+        
+        log_and_print(f"  Original: {len(full_metadata)} subjects")
+        log_and_print(f"  After exclusion: {len(filtered_metadata)} subjects")
+        log_and_print(f"  Removed: {len(full_metadata) - len(filtered_metadata)} subjects")
+        
+        # Save filtered metadata
+        filtered_path = f"{path_to_dir}/filtered_metadata_excl_{'_'.join(exclude_datasets)}.csv"
+        filtered_metadata.to_csv(filtered_path, index=False)
+        
+        # Use filtered metadata
+        path_original = filtered_path
+
+    #raw mri data 
     RAW_MRI_CSV = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/QC/CAT12_results_final.csv"
-    
+    #name atlases /vts
     joined_atlas_name = "_".join(str(a) for a in atlas_name if isinstance(a, str))
     joined_volume_name = "_".join(str(a) for a in volume_type if isinstance(a, str))
     
@@ -353,9 +150,10 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
             harmonized_split_path=harmonized_split_path,
             atlas_name=atlas_name,
             volume_type=volume_type,
-            save_dir=save_dir
+            save_dir=save_dir,
+            exclude_datasets=exclude_datasets,  
+            metadata_path=path_original  
         )
-        
         # Save normalization info
         normalization_info = {
             'method': 'neuroHarmonize',
@@ -772,7 +570,8 @@ if __name__ == "__main__":
         use_harmonized=args.use_harmonized,
         harmonized_train_path=args.harmonized_train_path,
         harmonized_app_path=args.harmonized_app_path,
-        harmonized_split_path=args.harmonized_split_path
+        harmonized_split_path=args.harmonized_split_path,
+        exclude_datasets=args.exclude_datasets
     )
     
     print(f"Normative modeling complete. Results saved to {save_dir}")

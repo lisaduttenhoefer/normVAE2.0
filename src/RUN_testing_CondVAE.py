@@ -55,6 +55,7 @@ from utils.dev_scores_utils_CVAE import (
 from utils.dev_scores_utils import (
     plot_all_deviation_metrics_errorbar,
     analyze_regional_deviations,
+    plot_deviation_errorbar_improved,
     create_corrected_correlation_heatmap,
 )
 
@@ -140,7 +141,15 @@ def main(args):
             raise FileNotFoundError(f"Test metadata not found: {test_metadata_path}")
         
         test_metadata = pd.read_csv(test_metadata_path)
-        log_and_print_test(f"✓ Loaded test metadata: {len(test_metadata)} subjects")
+        # ========== APPLY SAME EXCLUSIONS AS TRAINING ==========
+        if args.exclude_datasets:
+            log_and_print_test(f"\n⚠️  EXCLUDING DATASETS (same as training): {args.exclude_datasets}")
+            
+            original_count = len(test_metadata)
+            test_metadata = test_metadata[~test_metadata['Dataset'].isin(args.exclude_datasets)]
+            
+            log_and_print_test(f"   Removed {original_count - len(test_metadata)} subjects")
+            log_and_print_test(f"   Remaining: {len(test_metadata)} subjects")
         
         # ========== LOAD TRAINING METADATA (for IQR matching) ==========
         training_metadata_path = os.path.join(model_dir, "data", "train_metadata.csv")
@@ -379,7 +388,7 @@ def main(args):
         "CAT-MDD": "#160C28"
     }
     
-    metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv"
+    metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
     mri_data_path = RAW_MRI_CSV
     
     try:
@@ -450,7 +459,9 @@ def main(args):
         log_and_print_test("\n" + "="*80)
         log_and_print_test("CREATING VISUALIZATIONS")
         log_and_print_test("="*80)
-        
+
+        # Old version (for comparison)
+        log_and_print_test("[1/2] Creating original errorbar plots...")
         plot_all_deviation_metrics_errorbar(
             results_df=results_df,
             save_dir=save_dir,
@@ -458,7 +469,21 @@ def main(args):
             custom_colors=custom_colors,
             name="Combined_Analysis"
         )
-        
+
+        # New version (with multiple testing correction)
+        log_and_print_test("[2/2] Creating improved errorbar plots with FDR correction...")
+        from utils.dev_scores_utils import plot_deviation_errorbar_improved
+
+        plot_deviation_errorbar_improved(
+            results_df=results_df,
+            save_dir=save_dir,
+            norm_diagnosis=norm_diagnosis,
+            correction='fdr_bh',
+            custom_colors=custom_colors,
+            name="Combined_Analysis"
+        )
+
+        log_and_print_test("✓ All visualizations created")
         # ========== SAVE RESULTS ==========
         results_file = os.path.join(save_dir, "deviation_scores_combined.csv")
         results_df.to_csv(results_file, index=False)
@@ -588,6 +613,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", default=None)
     parser.add_argument("--no_cuda", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument('--exclude_datasets', nargs='*', default=[], help='Datasets to exclude from testing (e.g., EPSY NSS). Should match training exclusions!')
     
     args = parser.parse_args()
     main(args)
