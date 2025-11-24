@@ -50,16 +50,18 @@ from utils.dev_scores_utils import (
 from diagnose_vae import run_full_diagnostics
 
 
-def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, harmonized_split_path,
-                               atlas_name, volume_type):
+def load_harmonized_test_data(model_dir, test_metadata, harmonized_hc_path, harmonized_patients_path,
+                               hc_metadata_path, patient_metadata_path, atlas_name, volume_type):
     """
-    Load test data from pre-harmonized files.
+    Load test data from pre-harmonized files (consistent with training).
     
     Args:
         model_dir: Path to model directory
-        test_metadata: Test metadata DataFrame
-        harmonized_app_path: Path to harmonized application CSV
-        harmonized_split_path: Path to split info CSV
+        test_metadata: Test metadata DataFrame (HC + patients from training split)
+        harmonized_hc_path: Path to harmonized HC CSV
+        harmonized_patients_path: Path to harmonized patient CSV  
+        hc_metadata_path: Path to HC metadata CSV
+        patient_metadata_path: Path to patient metadata CSV
         atlas_name: Atlas name(s) to filter
         volume_type: Volume type(s) to filter
     
@@ -72,38 +74,17 @@ def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, har
     log_and_print_test("LOADING PRE-HARMONIZED TEST DATA")
     log_and_print_test("="*70)
     
-    # Load harmonized application data
-    app_harm = pd.read_csv(harmonized_app_path, index_col='Filename')
-    split_info = pd.read_csv(harmonized_split_path)
+    # Load harmonized data
+    hc_harm = pd.read_csv(harmonized_hc_path, index_col='Filename')
+    pat_harm = pd.read_csv(harmonized_patients_path, index_col='Filename')
     
-    log_and_print_test(f"Loaded harmonized application data: {app_harm.shape}")
-    log_and_print_test(f"Split info: {split_info.shape}")
+    log_and_print_test(f"Loaded harmonized HC data: {hc_harm.shape}")
+    log_and_print_test(f"Loaded harmonized patient data: {pat_harm.shape}")
     
-    # Get test HC filenames
-    test_hc_filenames = split_info[split_info['Split'] == 'test']['Filename'].tolist()
-    patient_filenames = split_info[split_info['Split'] == 'patient']['Filename'].tolist()
+    # Combine
+    all_harm = pd.concat([hc_harm, pat_harm])
     
-    log_and_print_test(f"Test HC samples: {len(test_hc_filenames)}")
-    log_and_print_test(f"Patient samples: {len(patient_filenames)}")
-    
-    # Combine test HC + patients
-    all_test_filenames = test_hc_filenames + patient_filenames
-    
-    # Filter to only filenames in test_metadata
-    requested_filenames = set(test_metadata['Filename'].tolist())
-    available_filenames = set(app_harm.index)
-    
-    valid_filenames = list(requested_filenames & available_filenames)
-    
-    log_and_print_test(f"Requested: {len(requested_filenames)}, Available: {len(available_filenames)}, Valid: {len(valid_filenames)}")
-    
-    if len(valid_filenames) == 0:
-        raise ValueError("No valid filenames found in harmonized data!")
-    
-    # Filter harmonized data
-    test_harm = app_harm.loc[valid_filenames]
-    
-    # Filter columns by atlas and volume type
+    # Filter columns (same logic as training)
     atlas_mapping = {
         'neuromorphometrics': 'Neurom',
         'lpba40': 'lpba40',
@@ -115,12 +96,12 @@ def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, har
         'Schaefer_100': 'Sch100',
         'Schaefer_200': 'Sch200',
         'aparc_DKT40': 'DK40',
-        'aparc_dk40': 'DK40',  # ← ADD: lowercase variant
+        'aparc_dk40': 'DK40',
         'aparc_a2009s': 'Destrieux'
     }
     
     filtered_cols = []
-    for col in test_harm.columns:
+    for col in all_harm.columns:
         parts = col.split('_', 2)
         if len(parts) < 2:
             continue
@@ -148,47 +129,25 @@ def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, har
             filtered_cols.append(col)
     
     log_and_print_test(f"Filtered to {len(filtered_cols)} ROI columns")
-    log_and_print_test(f"Example columns: {filtered_cols[:5]}")
     
     if len(filtered_cols) == 0:
         raise ValueError(f"No columns found matching atlas {atlas_name} and volume types {volume_type}!")
     
-    test_harm = test_harm[filtered_cols]
+    all_harm = all_harm[filtered_cols]
     
-    # ========== NORMALIZE HARMONIZED DATA WITH IQR ==========
-    log_and_print_test("\n[INFO] Applying IQR normalization to harmonized test data...")
+    # Filter to subjects in test_metadata
+    valid_filenames = set(test_metadata['Filename'].tolist())
+    available_filenames = set(all_harm.index)
     
-    # Load normalization stats from training
-    norm_stats_path = f"{model_dir}/data/normalization_stats.pkl"
+    matched_filenames = list(valid_filenames & available_filenames)
     
-    if os.path.exists(norm_stats_path):
-        import pickle
-        with open(norm_stats_path, 'rb') as f:
-            norm_stats = pickle.load(f)
-        
-        log_and_print_test(f"✓ Loaded normalization stats from training")
-        
-        # Apply normalization using training stats
-        test_harm_df = test_harm.reset_index()  # Filename becomes column
-        
-        for col in filtered_cols:
-            if col in norm_stats:
-                median = norm_stats[col]['median']
-                iqr = norm_stats[col]['iqr']
-                
-                if iqr > 0:
-                    test_harm_df[col] = (test_harm_df[col] - median) / iqr
-                else:
-                    test_harm_df[col] = test_harm_df[col] - median
-        
-        log_and_print_test(f"✓ Normalized {len(filtered_cols)} ROI columns using training IQR statistics")
-        
-        # Update test_harm with normalized values
-        test_harm = test_harm_df.set_index('Filename')[filtered_cols]
-        
-    else:
-        log_and_print_test(f"⚠️ WARNING: No normalization stats found at {norm_stats_path}")
-        log_and_print_test(f"  Using harmonized data without additional normalization")
+    log_and_print_test(f"Requested: {len(valid_filenames)}, Available: {len(available_filenames)}, Matched: {len(matched_filenames)}")
+    
+    if len(matched_filenames) == 0:
+        raise ValueError("No valid filenames found in harmonized data!")
+    
+    # Filter harmonized data
+    test_harm = all_harm.loc[matched_filenames]
     
     # Create subjects list
     subjects_dev = []
@@ -201,7 +160,7 @@ def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, har
         })
     
     # Filter test_metadata to matched subjects
-    annotations_dev = test_metadata[test_metadata['Filename'].isin(valid_filenames)].copy()
+    annotations_dev = test_metadata[test_metadata['Filename'].isin(matched_filenames)].copy()
     annotations_dev = annotations_dev.reset_index(drop=True)
     
     log_and_print_test(f"\n✓ Created {len(subjects_dev)} test subjects")
@@ -210,7 +169,6 @@ def load_harmonized_test_data(model_dir, test_metadata, harmonized_app_path, har
     roi_names = filtered_cols
     
     return subjects_dev, annotations_dev, roi_names
-
 
 def main(args):
     # ---------------------- INITIAL SETUP --------------------------------------------
@@ -268,6 +226,23 @@ def main(args):
         kldiv_loss_weight = float(config_df["KLDIV_LOSS_WEIGHT"].iloc[0])
         recon_loss_weight = float(config_df["RECON_LOSS_WEIGHT"].iloc[0])
         
+                # ========== READ EXCLUDE_DATASETS FROM CONFIG ==========
+        exclude_datasets = []
+        if "EXCLUDE_DATASETS" in config_df.columns:
+            exclude_val = config_df["EXCLUDE_DATASETS"].iloc[0]
+            if isinstance(exclude_val, str) and exclude_val.startswith('['):
+                exclude_datasets = eval(exclude_val)
+            elif isinstance(exclude_val, str) and exclude_val != '':
+                exclude_datasets = [exclude_val]
+            elif isinstance(exclude_val, list):
+                exclude_datasets = exclude_val
+
+        if exclude_datasets and len(exclude_datasets) > 0:
+            log_and_print_test(f"\n⚠️  Model was trained with EXCLUDED datasets: {exclude_datasets}")
+            log_and_print_test(f"  These datasets will also be excluded from testing!")
+        else:
+            log_and_print_test(f"\nNo datasets excluded during training")
+            
         # ========== CHECK IF MODEL USED HARMONIZATION ==========
         use_harmonized = config_df["USE_HARMONIZED"].iloc[0] if "USE_HARMONIZED" in config_df.columns else False
         if isinstance(use_harmonized, str):
@@ -309,6 +284,7 @@ def main(args):
     log_and_print_test("="*80)
 
     # Parse TEST_CSV
+    # ========== LOAD TEST DATA ==========
     TEST_CSV = config_df["TEST_CSV"].iloc[0] if "TEST_CSV" in config_df.columns else args.clinical_csv
 
     if isinstance(TEST_CSV, str):
@@ -319,34 +295,39 @@ def main(args):
     if not os.path.exists(TEST_CSV):
         raise FileNotFoundError(f"Test CSV not found: {TEST_CSV}")
 
+    # Load ONLY test HC from training split
     test_metadata = pd.read_csv(TEST_CSV)
-    log_and_print_test(f"✓ Test metadata (HC only): {len(test_metadata)} subjects")
-    
+    log_and_print_test(f"✓ Test HC metadata (from training split): {len(test_metadata)} subjects")
+
+    # Verify all are HC
+    non_hc = (test_metadata['Diagnosis'] != norm_diagnosis).sum()
+    if non_hc > 0:
+        log_and_print_test(f"⚠️  WARNING: Found {non_hc} non-HC in test split, filtering to HC only")
+        test_metadata = test_metadata[test_metadata['Diagnosis'] == norm_diagnosis].copy()
+
+    log_and_print_test(f"✓ Test HC: {len(test_metadata)} subjects")
+
     # ========== ADD PATIENT DATA ==========
-    # The test_metadata from training only contains HC test samples
-    # We need to add patients for regional analysis
-    
     log_and_print_test("\n[INFO] Loading patient data for regional analysis...")
-    
+
     full_metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
     full_metadata = pd.read_csv(full_metadata_path)
-    
-    # Get all patients (not HC)
+
+    # ========== APPLY EXCLUSION FILTER ==========
+    if exclude_datasets and len(exclude_datasets) > 0:
+        log_and_print_test(f"  Filtering out excluded datasets: {exclude_datasets}")
+        full_metadata = full_metadata[~full_metadata['Dataset'].isin(exclude_datasets)]
+        log_and_print_test(f"  Remaining subjects after exclusion: {len(full_metadata)}")
+
+    # Get ONLY patients (no HC)
     patients = full_metadata[full_metadata['Diagnosis'].isin(['MDD', 'SSD', 'CAT', 'CAT-SSD', 'CAT-MDD'])].copy()
-    
+
     log_and_print_test(f"  Found {len(patients)} patients:")
     for diag in ['MDD', 'SSD', 'CAT', 'CAT-SSD', 'CAT-MDD']:
         n = (patients['Diagnosis'] == diag).sum()
         if n > 0:
             log_and_print_test(f"    {diag}: {n}")
-    
-    # Combine HC test + patients
-    test_metadata = pd.concat([test_metadata, patients], ignore_index=True)
-    
-    log_and_print_test(f"\n✓ Combined test set: {len(test_metadata)} subjects total")
-    log_and_print_test(f"  Diagnosis distribution:")
-    for diag, count in sorted(test_metadata['Diagnosis'].value_counts().items()):
-        log_and_print_test(f"    {diag}: {count}")
+    # ========== END REPLACEMENT ==========
 
     # ========== BRANCH: Load harmonized OR normalized data ==========
     
@@ -360,8 +341,10 @@ def main(args):
         subjects_dev, annotations_dev, roi_names = load_harmonized_test_data(
             model_dir=model_dir,
             test_metadata=test_metadata,
-            harmonized_app_path=args.harmonized_app_path,
-            harmonized_split_path=args.harmonized_split_path,
+            harmonized_hc_path=args.harmonized_train_path,  # ← Jetzt HC path
+            harmonized_patients_path=args.harmonized_app_path,  # ← Jetzt patients path
+            hc_metadata_path=args.harmonized_split_path + 'hc_metadata_for_vae.csv',
+            patient_metadata_path=args.harmonized_split_path + 'patient_metadata.csv',
             atlas_name=atlas_name,
             volume_type=volume_type
         )
@@ -379,7 +362,44 @@ def main(args):
             volume_type=volume_type
         )
 
+    # Line 432 - existing code
     clinical_data = extract_measurements(subjects_dev)
+
+    # ========== UPDATED FIX - HANDLE DUPLICATES ==========
+    log_and_print_test(f"\n[DEBUG] Checking data alignment...")
+    log_and_print_test(f"  subjects_dev: {len(subjects_dev)}")
+    log_and_print_test(f"  annotations_dev: {len(annotations_dev)}")
+    log_and_print_test(f"  clinical_data: {clinical_data.shape[0]}")
+
+    # Check for duplicates in annotations_dev
+    duplicates = annotations_dev['Filename'].duplicated().sum()
+    if duplicates > 0:
+        log_and_print_test(f"\n⚠️  WARNING: Found {duplicates} duplicate filenames in annotations_dev!")
+        log_and_print_test(f"  Removing duplicates and keeping first occurrence...")
+        
+        # Show example duplicates
+        dup_filenames = annotations_dev[annotations_dev['Filename'].duplicated(keep=False)]['Filename'].unique()
+        log_and_print_test(f"  Example duplicated filenames: {dup_filenames[:5].tolist()}")
+        
+        # Remove duplicates, keeping first occurrence
+        annotations_dev = annotations_dev.drop_duplicates(subset='Filename', keep='first').reset_index(drop=True)
+        log_and_print_test(f"  After removing duplicates: {len(annotations_dev)} subjects")
+
+    # Get the filenames that are actually in clinical_data/subjects_dev
+    valid_filenames = set([s['Filename'] for s in subjects_dev])
+
+    # Filter to only subjects that exist in subjects_dev
+    annotations_dev = annotations_dev[annotations_dev['Filename'].isin(valid_filenames)].copy()
+    annotations_dev = annotations_dev.reset_index(drop=True)
+
+    log_and_print_test(f"  Final annotations_dev: {len(annotations_dev)} subjects")
+
+    # Verify alignment
+    assert len(subjects_dev) == len(annotations_dev) == clinical_data.shape[0], \
+        f"Size mismatch after alignment: subjects={len(subjects_dev)}, annotations={len(annotations_dev)}, data={clinical_data.shape[0]}"
+
+    log_and_print_test(f"\n✓ Data successfully aligned: {len(annotations_dev)} subjects")
+    # ========== END OF FIX ==========
 
     log_and_print_test(f"\n✓ Clinical data: {clinical_data.shape}")
     log_and_print_test(f"✓ Subjects: {len(annotations_dev)}")
@@ -739,16 +759,22 @@ if __name__ == "__main__":
     
     # ========== HARMONIZATION OPTIONS ==========
     parser.add_argument(
+        '--harmonized_train_path',
+        type=str,
+        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_harmonized_for_vae.csv',
+        help='Path to harmonized HC data (only used if model was trained with harmonization)'
+    )
+    parser.add_argument(
         '--harmonized_app_path',
         type=str,
-        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU.csv',
-        help='Path to harmonized application data (only used if model was trained with harmonization)'
+        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/patients_harmonized.csv',
+        help='Path to harmonized patient data (only used if model was trained with harmonization)'
     )
     parser.add_argument(
         '--harmonized_split_path',
         type=str,
-        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/app_split_info_noNU.csv',
-        help='Path to split info (only used if model was trained with harmonization)'
+        default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/',
+        help='Directory containing metadata files (only used if model was trained with harmonization)'
     )
     
     args = parser.parse_args()

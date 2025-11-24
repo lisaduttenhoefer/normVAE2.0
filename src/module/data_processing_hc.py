@@ -1674,195 +1674,154 @@ def validate_normalization(
     else:
         print(f"⚠️  SOME CHECKS FAILED!")
 
-def load_harmonized_data(
-    harmonized_train_path,
-    harmonized_app_path,
-    harmonized_split_path,
-    atlas_name,
-    volume_type,
-    save_dir,
-    exclude_datasets=None,
-    metadata_path=None  # ← NEW PARAMETER!
-):
-    """
-    Load pre-harmonized data from neuroHarmonize
-    
-    Args:
-        exclude_datasets: List of datasets to exclude (e.g., ['EPSY', 'NSS'])
-        metadata_path: Path to metadata CSV with Dataset column (optional, will try default)
-    """
+def load_harmonized_data(harmonized_hc_path, harmonized_patients_path, hc_metadata_path, 
+                         patient_metadata_path, atlas_name, volume_type, save_dir, 
+                         norm_diagnosis, train_ratio, random_seed, exclude_datasets, 
+                         metadata_path):
+    """Load harmonized data and create train/test split with IQR normalization"""
     
     log_and_print("\n" + "="*80)
     log_and_print("LOADING HARMONIZED DATA")
     log_and_print("="*80)
     
-    # Load harmonized files
-    train_harm = pd.read_csv(harmonized_train_path, index_col='Filename')
-    app_harm = pd.read_csv(harmonized_app_path, index_col='Filename')
-    split_info = pd.read_csv(harmonized_split_path)
+    # Load harmonized HC data
+    log_and_print(f"\n[LOADING HC DATA]")
+    log_and_print(f"  Path: {harmonized_hc_path}")
+    hc_data = pd.read_csv(harmonized_hc_path)
+    log_and_print(f"  ✓ Loaded {len(hc_data)} HC subjects with {len(hc_data.columns)} columns")
     
-    log_and_print(f"Loaded harmonized training data: {train_harm.shape}")
-    log_and_print(f"Loaded harmonized application data: {app_harm.shape}")
-    log_and_print(f"Loaded split info: {len(split_info)} subjects")
+    # Load HC metadata
+    log_and_print(f"  Loading metadata: {hc_metadata_path}")
+    hc_metadata = pd.read_csv(hc_metadata_path)
+    log_and_print(f"  ✓ Loaded metadata for {len(hc_metadata)} HC subjects")
     
-    # ========== FILTER EXCLUDED DATASETS ==========
-    if exclude_datasets and len(exclude_datasets) > 0:
-        log_and_print(f"\n[INFO] Filtering harmonized data: excluding {exclude_datasets}")
-        
-        # ========== Load metadata to get Dataset info ==========
-        if metadata_path is None:
-            metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
-            log_and_print(f"[INFO] Using default metadata path: {metadata_path}")
-        
-        metadata = pd.read_csv(metadata_path)
-        
-        if 'Dataset' not in metadata.columns:
-            log_and_print("⚠️  ERROR: 'Dataset' column not found in metadata!")
-            log_and_print(f"   Available columns: {metadata.columns.tolist()}")
-            log_and_print("   → Cannot filter by dataset, proceeding without filtering")
-        else:
-            log_and_print(f"[INFO] Loaded metadata: {len(metadata)} subjects")
-            log_and_print(f"[INFO] Metadata datasets: {metadata['Dataset'].unique()}")
-            
-            # ========== Merge Dataset info into split_info ==========
-            log_and_print("[INFO] Merging Dataset info into split_info...")
-            
-            split_info = split_info.merge(
-                metadata[['Filename', 'Dataset']],
-                on='Filename',
-                how='left'
-            )
-            
-            # Check for missing Dataset info
-            missing_dataset = split_info['Dataset'].isna().sum()
-            if missing_dataset > 0:
-                log_and_print(f"⚠️  WARNING: {missing_dataset} subjects have missing Dataset info")
-                log_and_print("   These subjects will be kept (not filtered)")
-            
-            # ========== Filter by dataset ==========
-            original_count = len(split_info)
-            
-            # Keep subjects that either:
-            # 1. Don't have Dataset info (NaN)
-            # 2. Have Dataset info but not in exclude list
-            split_info = split_info[
-                split_info['Dataset'].isna() | 
-                ~split_info['Dataset'].isin(exclude_datasets)
-            ]
-            
-            excluded_count = original_count - len(split_info)
-            
-            log_and_print(f"   Removed {excluded_count} subjects from split info")
-            log_and_print(f"   Remaining: {len(split_info)} subjects")
-            
-            # Show remaining datasets
-            if not split_info['Dataset'].isna().all():
-                log_and_print("\n   Remaining datasets:")
-                for ds, count in split_info['Dataset'].value_counts(dropna=False).items():
-                    if pd.isna(ds):
-                        log_and_print(f"     (Unknown): {count}")
-                    else:
-                        log_and_print(f"     {ds}: {count}")
-            
-            # ========== Filter harmonized data ==========
-            valid_filenames = split_info['Filename'].tolist()
-            
-            train_harm = train_harm[train_harm.index.isin(valid_filenames)]
-            app_harm = app_harm[app_harm.index.isin(valid_filenames)]
-            
-            log_and_print(f"\n   Filtered harmonized train data: {train_harm.shape}")
-            log_and_print(f"   Filtered harmonized app data: {app_harm.shape}")
+    # Load harmonized patient data
+    log_and_print(f"\n[LOADING PATIENT DATA]")
+    log_and_print(f"  Path: {harmonized_patients_path}")
+    pat_data = pd.read_csv(harmonized_patients_path)
+    log_and_print(f"  ✓ Loaded {len(pat_data)} patient subjects with {len(pat_data.columns)} columns")
     
-    # ========== Filter columns by atlas and volume type ==========
-    atlas_mapping = {
-        'neuromorphometrics': 'Neurom',
-        'lpba40': 'lpba40',
-        'hammers': 'Hammers',
-        'aal3': 'AAL3',
-        'cobra': 'cobra',
-        'suit': 'SUIT',
-        'ibsr': 'IBSR',
-        'Schaefer_100': 'Sch100',
-        'Schaefer_200': 'Sch200',
-        'aparc_DKT40': 'DK40',
-        'aparc_dk40': 'DK40',
-        'aparc_a2009s': 'Destrieux'
-    }
+    # Load patient metadata
+    log_and_print(f"  Loading metadata: {patient_metadata_path}")
+    pat_metadata = pd.read_csv(patient_metadata_path)
+    log_and_print(f"  ✓ Loaded metadata for {len(pat_metadata)} patient subjects")
     
-    # Get all columns from both train and app
-    all_columns = list(set(train_harm.columns) | set(app_harm.columns))
+    # Apply dataset exclusions to HC
+    log_and_print(f"\n[APPLYING DATASET EXCLUSIONS]")
+    log_and_print(f"  Excluding datasets: {exclude_datasets}")
+    hc_before = len(hc_metadata)
+    hc_metadata = hc_metadata[~hc_metadata['Dataset'].isin(exclude_datasets)]
+    hc_after = len(hc_metadata)
+    log_and_print(f"  HC: {hc_before} → {hc_after} ({hc_before - hc_after} excluded)")
     
-    filtered_cols = []
-    for col in all_columns:
-        parts = col.split('_', 2)
-        if len(parts) < 2:
-            continue
-        
-        col_volume = parts[0]
-        col_atlas = parts[1]
-        
-        # Check volume type match
-        vol_match = col_volume in volume_type
-        
-        # Check atlas match
-        atlas_match = False
-        if isinstance(atlas_name, list):
-            if "all" in atlas_name:
-                atlas_match = True
-            else:
-                for atlas in atlas_name:
-                    atlas_short = atlas_mapping.get(atlas.lower(), atlas)
-                    if col_atlas == atlas_short or atlas.lower() in col_atlas.lower():
-                        atlas_match = True
-                        break
-        else:
-            atlas_short = atlas_mapping.get(atlas_name.lower(), atlas_name)
-            atlas_match = col_atlas == atlas_short or atlas_name.lower() in col_atlas.lower() or atlas_name == "all"
-        
-        if atlas_match and vol_match:
-            filtered_cols.append(col)
+    # Filter HC data to match metadata
+    hc_data = hc_data[hc_data['Filename'].isin(hc_metadata['Filename'])]
+    log_and_print(f"  ✓ Filtered HC data to {len(hc_data)} subjects")
     
-    log_and_print(f"\nFiltered to {len(filtered_cols)} ROI columns")
-    log_and_print(f"Example columns: {filtered_cols[:5]}")
+    # Apply dataset exclusions to patients
+    pat_before = len(pat_metadata)
+    pat_metadata = pat_metadata[~pat_metadata['Dataset'].isin(exclude_datasets)]
+    pat_after = len(pat_metadata)
+    log_and_print(f"  Patients: {pat_before} → {pat_after} ({pat_before - pat_after} excluded)")
     
-    if len(filtered_cols) == 0:
-        raise ValueError(f"No columns found matching atlas {atlas_name} and volume types {volume_type}!")
+    log_and_print(f"\n[FILTERING ROI COLUMNS]")
+    log_and_print(f"  Atlas: {atlas_name}")
+    log_and_print(f"  Volume type: {volume_type}")
+    log_and_print(f"  Note: ROIs already filtered during harmonization")
+
+    # Simply use all non-metadata columns as ROIs
+    roi_cols = [col for col in hc_data.columns if col != 'Filename']
+    log_and_print(f"  ✓ Using {len(roi_cols)} ROI columns from harmonized data")
+
+    # Data already has correct columns - no need to select
+    log_and_print(f"  ✓ HC data: {hc_data.shape}")
+    log_and_print(f"  ✓ Patient data: {pat_data.shape}")
     
-    # Filter both dataframes
-    train_harm = train_harm[[col for col in filtered_cols if col in train_harm.columns]]
-    app_harm = app_harm[[col for col in filtered_cols if col in app_harm.columns]]
+    # Create train/test split for HC
+    log_and_print(f"\n[CREATING TRAIN/TEST SPLIT]")
+    log_and_print(f"  Split ratio: {train_ratio*100:.0f}% train, {(1-train_ratio)*100:.0f}% test")
+    log_and_print(f"  Random seed: {random_seed}")
     
-    # ========== Create train/test split from split_info ==========
-    train_filenames = split_info[split_info['Split'] == 'train']['Filename'].tolist()
-    test_filenames = split_info[split_info['Split'] == 'test']['Filename'].tolist()
+    np.random.seed(random_seed)
+    n_hc = len(hc_data)
+    indices = np.random.permutation(n_hc)
+    split_idx = int(train_ratio * n_hc)
     
-    log_and_print(f"\n✓ Train subjects: {len(train_filenames)}")
-    log_and_print(f"✓ Test subjects: {len(test_filenames)}")
+    train_idx = indices[:split_idx]
+    test_idx = indices[split_idx:]
     
-    # ========== Create metadata DataFrames ==========
-    # Load full metadata again
-    if metadata_path is None:
-        metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
+    # Split HC data
+    hc_train_data = hc_data.iloc[train_idx].copy()
+    hc_test_data = hc_data.iloc[test_idx].copy()
     
-    metadata_full = pd.read_csv(metadata_path)
+    # Split HC metadata
+    hc_train_metadata = hc_metadata.iloc[train_idx].copy()
+    hc_test_metadata = hc_metadata.iloc[test_idx].copy()
     
-    train_metadata = metadata_full[metadata_full['Filename'].isin(train_filenames)].copy()
-    test_metadata = metadata_full[metadata_full['Filename'].isin(test_filenames)].copy()
+    log_and_print(f"  ✓ Train: {len(hc_train_data)} HC subjects")
+    log_and_print(f"  ✓ Test: {len(hc_test_data)} HC subjects")
     
-    # ========== Save filtered and split data ==========
-    os.makedirs(f"{save_dir}/data", exist_ok=True)
+    # Merge data with metadata for train
+    train_overview = pd.merge(hc_train_metadata, hc_train_data, on='Filename', how='inner')
+    log_and_print(f"  ✓ Train overview: {train_overview.shape}")
     
-    # Combine train + app harmonized data
-    combined_harm = pd.concat([train_harm, app_harm])
-    normalized_csv_path = f"{save_dir}/data/harmonized_data_combined.csv"
-    combined_harm.to_csv(normalized_csv_path)
+    # Merge data with metadata for test (HC + patients)
+    test_hc_overview = pd.merge(hc_test_metadata, hc_test_data, on='Filename', how='inner')
+    test_pat_overview = pd.merge(pat_metadata, pat_data, on='Filename', how='inner')
+    test_overview = pd.concat([test_hc_overview, test_pat_overview], ignore_index=True)
+    log_and_print(f"  ✓ Test overview: {test_overview.shape} ({len(test_hc_overview)} HC + {len(test_pat_overview)} patients)")
     
-    # Save metadata
-    train_metadata.to_csv(f"{save_dir}/data/train_metadata_harmonized.csv", index=False)
-    test_metadata.to_csv(f"{save_dir}/data/test_metadata_harmonized.csv", index=False)
+    # Fix Sex encoding: 'M'/'F' → 'Male'/'Female'
+    log_and_print(f"\n[FIXING SEX ENCODING]")
+    for df, name in [(train_overview, 'train'), (test_overview, 'test')]:
+        if 'Sex' not in df.columns and 'Sex_Male' in df.columns:
+            df['Sex'] = df['Sex_Male'].map({1: 'Male', 0: 'Female'})
+            log_and_print(f"  ✓ Created 'Sex' column from 'Sex_Male' in {name} (as 'Male'/'Female')")
+        elif 'Sex' in df.columns:
+            # If Sex exists but has wrong encoding, fix it
+            if set(df['Sex'].unique()).issubset({'M', 'F'}):
+                df['Sex'] = df['Sex'].map({'M': 'Male', 'F': 'Female'})
+                log_and_print(f"  ✓ Converted Sex encoding in {name}: 'M'/'F' → 'Male'/'Female'")
     
-    log_and_print(f"\n✓ Saved harmonized data: {normalized_csv_path}")
-    log_and_print(f"✓ Train metadata: {len(train_metadata)} subjects")
-    log_and_print(f"✓ Test metadata: {len(test_metadata)} subjects")
+    # ===== IQR NORMALIZATION =====
+    log_and_print(f"\n[IQR NORMALIZATION]")
+    log_and_print(f"  ROI columns to normalize: {len(roi_cols)}")
     
-    return combined_harm, train_metadata, test_metadata, normalized_csv_path
+    # Calculate IQR on TRAINING DATA ONLY
+    train_data = train_overview[roi_cols].values
+    Q1 = np.percentile(train_data, 25, axis=0)
+    Q3 = np.percentile(train_data, 75, axis=0)
+    IQR = Q3 - Q1
+    median = np.median(train_data, axis=0)
+    
+    # Handle zero IQR (add small epsilon)
+    IQR = np.where(IQR == 0, 1e-6, IQR)
+    
+    log_and_print(f"  Median range: [{median.min():.3f}, {median.max():.3f}]")
+    log_and_print(f"  IQR range: [{IQR.min():.3f}, {IQR.max():.3f}]")
+    
+    # Apply IQR normalization to ALL data using training statistics
+    train_overview[roi_cols] = (train_overview[roi_cols] - median) / IQR
+    test_overview[roi_cols] = (test_overview[roi_cols] - median) / IQR
+    
+    log_and_print(f"  ✓ Applied IQR normalization")
+    log_and_print(f"  Train data range: [{train_overview[roi_cols].min().min():.3f}, {train_overview[roi_cols].max().max():.3f}]")
+    log_and_print(f"  Test data range: [{test_overview[roi_cols].min().min():.3f}, {test_overview[roi_cols].max().max():.3f}]")
+    
+    # Save temp file for downstream compatibility
+    normalized_csv_path = os.path.join(save_dir, "temp_normalized_mri_harmonized.csv")
+    combined_data = pd.concat([train_overview, test_overview], ignore_index=True)
+    combined_data.to_csv(normalized_csv_path, index=False)
+    log_and_print(f"\n[SAVED TEMP FILE]")
+    log_and_print(f"  Path: {normalized_csv_path}")
+    log_and_print(f"  Shape: {combined_data.shape}")
+    
+    log_and_print("\n" + "="*80)
+    log_and_print(f"✓ DATA LOADING COMPLETE")
+    log_and_print(f"  Train: {len(train_overview)} HC subjects")
+    log_and_print(f"  Test: {len(test_overview)} subjects ({len(test_hc_overview)} HC + {len(test_pat_overview)} patients)")
+    log_and_print(f"  Features: {len(roi_cols)} ROIs (normalized)")
+    log_and_print("="*80 + "\n")
+    
+    # Return values matching expected output
+    return combined_data, train_overview, test_overview, normalized_csv_path

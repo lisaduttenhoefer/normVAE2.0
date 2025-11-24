@@ -79,9 +79,9 @@ def create_arg_parser():
     parser.add_argument('--normalization_method',type=str, default='rowwise', choices=['rowwise', 'columnwise'], help="Normalization method: 'rowwise' (Pinaya approach) or 'columnwise' (classical neuroimaging)")
     # ========== HARMONIZATION OPTION ==========
     parser.add_argument('--use_harmonized', action='store_true', help='Use pre-harmonized data from neuroHarmonize instead of IQR normalization')
-    parser.add_argument('--harmonized_train_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_train_roi_harmonized_50.csv', help='Path to harmonized training data')
-    parser.add_argument('--harmonized_app_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/application_roi_harmonized_noNU_50.csv', help='Path to harmonized application data (test HC + patients)')
-    parser.add_argument('--harmonized_split_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/app_split_info_noNU_50.csv', help='Path to split info (which samples are test vs patient)')
+    parser.add_argument('--harmonized_train_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/hc_harmonized_for_vae.csv', help='Path to harmonized training data')
+    parser.add_argument('--harmonized_app_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/patients_harmonized.csv', help='Path to harmonized application data (test HC + patients)')
+    parser.add_argument('--harmonized_split_path', type=str, default='/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/combat_neuro/combat_results/', help='Path to split info (Directory containing metadata files hc_metadata_for_vae.csv, patient_metadata.csv)')
     return parser
 
 
@@ -144,21 +144,31 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
         # ========== OPTION A: USE PRE-HARMONIZED DATA ==========
         log_and_print("\n🔬 Using PRE-HARMONIZED data from neuroHarmonize")
         
+        # Construct metadata paths from directory
+        metadata_dir = harmonized_split_path.rstrip('/')  # Remove trailing slash if present
+        
         normalized_mri_data, train_metadata, test_metadata, normalized_csv_path = load_harmonized_data(
-            harmonized_train_path=harmonized_train_path,
-            harmonized_app_path=harmonized_app_path,
-            harmonized_split_path=harmonized_split_path,
+            harmonized_hc_path=harmonized_train_path,
+            harmonized_patients_path=harmonized_app_path,
+            hc_metadata_path=f"{metadata_dir}/hc_metadata_for_vae.csv",
+            patient_metadata_path=f"{metadata_dir}/patient_metadata.csv",
             atlas_name=atlas_name,
             volume_type=volume_type,
             save_dir=save_dir,
-            exclude_datasets=exclude_datasets,  
-            metadata_path=path_original  
+            norm_diagnosis=norm_diagnosis,
+            train_ratio=train_ratio,
+            random_seed=seed,
+            exclude_datasets=exclude_datasets,
+            metadata_path=path_original
         )
+        
         # Save normalization info
         normalization_info = {
             'method': 'neuroHarmonize',
-            'harmonized_train_path': harmonized_train_path,
-            'harmonized_app_path': harmonized_app_path,
+            'harmonized_hc_path': harmonized_train_path,
+            'harmonized_patients_path': harmonized_app_path,
+            'metadata_dir': metadata_dir,
+            'train_ratio': train_ratio,
             'timestamp': timestamp
         }
         
@@ -267,10 +277,12 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     log_and_print(f"Using harmonized data: {use_harmonized}")
 
     # Save configuration
+    # Save configuration
     config_dict = vars(config)
     config_dict['NORMALIZATION_METHOD'] = normalization_method
     config_dict['USE_HARMONIZED'] = use_harmonized
     config_dict['HARMONIZED_TRAIN_PATH'] = harmonized_train_path if use_harmonized else None
+    config_dict['EXCLUDE_DATASETS'] = exclude_datasets  # ← NEU!
     config_df = pd.DataFrame([config_dict])
     config_df.to_csv(f"{save_dir}/config.csv", index=False)
     log_and_print(f"Configuration saved to {save_dir}/config.csv")
@@ -297,12 +309,20 @@ def main(atlas_name: list, volume_type, num_epochs: int, n_bootstraps: int, norm
     from module.data_processing_hc import load_mri_data_2D_conditional
     
     subjects_train, train_overview, roi_names_train = load_mri_data_2D_conditional(
-        normalized_csv_path=normalized_csv_path,
-        csv_paths=[temp_meta_path],
-        diagnoses=[norm_diagnosis],
-        atlas_name=config.ATLAS_NAME,
-        volume_type=config.VOLUME_TYPE
+    normalized_csv_path=normalized_csv_path,
+    csv_paths=[temp_meta_path],
+    diagnoses=[norm_diagnosis],
+    atlas_name=config.ATLAS_NAME,
+    volume_type=config.VOLUME_TYPE
     )
+
+    # ========== DEBUG: Check what we loaded ==========
+    log_and_print(f"  Shape: {train_overview.shape}")
+    log_and_print(f"  Diagnosis values: {train_overview['Diagnosis'].value_counts().to_dict()}")
+    log_and_print(f"  First few rows:")
+    log_and_print(train_overview.head())
+    log_and_print(f"\n[DEBUG] Attempting to split with norm_diagnosis='{norm_diagnosis}'")
+
     
     # Save train metadata for testing later
     train_overview.to_csv(f"{save_dir}/data/train_metadata.csv", index=False)

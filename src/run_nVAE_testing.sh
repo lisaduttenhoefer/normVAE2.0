@@ -25,7 +25,7 @@ echo ""
 
 # IMPORTANT: Update this path to your actual training results directory
 # Example: /net/data.isilon/.../norm_results_HC_Vgm_Vwm_Vcsf_G_T_all_20251022_1625
-MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/nVAE/TRAINING/norm_results_HC_Vgm_T_G_neuromorpometrics_aparc_dk40_columnwise_20251121_1545"
+MODEL_DIR="/net/data.isilon/ag-cherrmann/lduttenhoefer/project/VAE_model/analysis/nVAE/TRAINING/norm_results_HC_Vgm_T_G_neuromorphometrics_aparc_dk40_columnwise_20251124_1931"
 echo "=== Model Directory ==="
 echo "$MODEL_DIR"
 echo ""
