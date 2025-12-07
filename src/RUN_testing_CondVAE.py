@@ -57,6 +57,11 @@ from utils.dev_scores_utils import (
     analyze_regional_deviations,
     plot_deviation_errorbar_improved,
     create_corrected_correlation_heatmap,
+    analyze_clinical_correlations,
+    analyze_subgroups,
+    analyze_ncrs_predictions,
+    create_paper_figure_significant_correlations,
+    create_combined_paper_figure
 )
 
 from diagnose_vae import run_full_diagnostics
@@ -390,6 +395,10 @@ def main(args):
     
     metadata_path = "/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/metadata_CVAE.csv"
     mri_data_path = RAW_MRI_CSV
+
+    # Initialize variables in case of error
+    regional_results = None
+    regional_subject_roi_data = None
     
     try:
         # [1] Bootstrap method
@@ -516,7 +525,7 @@ def main(args):
         log_and_print_test("REGIONAL DEVIATION ANALYSIS")
         log_and_print_test("="*80)
         
-        regional_results = analyze_regional_deviations(
+        regional_results, regional_subject_roi_data = analyze_regional_deviations(
             results_df=results_df,
             save_dir=save_dir,
             clinical_data_path=mri_data_path,
@@ -576,6 +585,100 @@ def main(args):
     except Exception as e:
         log_and_print_test(f"Warning: Latent visualization failed: {e}")
     
+    results_dir = save_dir 
+    clinical_data_path = '/net/data.isilon/ag-cherrmann/lduttenhoefer/project/CAT12_newvals/metadata/complete_metadata.csv'
+
+    if os.path.exists(clinical_data_path):
+        log_and_print_test("\n" + "="*80)
+        log_and_print_test("STARTING CLINICAL CORRELATION ANALYSIS")
+        log_and_print_test("="*80)
+        
+        # Check if we have regional data
+        if regional_subject_roi_data is not None and 'ROI_Name' in regional_subject_roi_data.columns:
+            log_and_print_test(f"\n[INFO] Using regional data for clinical analysis:")
+            log_and_print_test(f"  Subjects: {regional_subject_roi_data['Filename'].nunique()}")
+            log_and_print_test(f"  ROIs: {regional_subject_roi_data['ROI_Name'].nunique()}")
+            
+            # Clinical correlations (all scores, no ML)
+            try:
+                clinical_corr, diag_corr = analyze_clinical_correlations(
+                    results_df=regional_subject_roi_data,
+                    clinical_data_path=clinical_data_path,
+                    save_dir=results_dir,
+                    datasets_with_clinical=['NSS', 'whiteCAT'],
+                    min_subjects=20,
+                    apply_fdr=True,
+                    skip_ml=True
+                )
+                log_and_print_test("\n✓ Clinical correlation analysis complete!")
+                
+                # ========== CREATE PAPER-READY VISUALIZATIONS ==========
+                log_and_print_test("\n" + "="*80)
+                log_and_print_test("CREATING PAPER-READY VISUALIZATIONS")
+                log_and_print_test("="*80)
+                
+                csv_path = f"{results_dir}/clinical_correlations_significant.csv"
+                output_dir = f"{results_dir}/figures/paper_ready"
+                
+                if os.path.exists(csv_path):
+                    log_and_print_test(f"\n[INFO] Found significant correlations, creating visualizations...")
+                    
+                    os.makedirs(output_dir, exist_ok=True)
+                    
+                    try:
+                        # Create individual figures
+                        create_paper_figure_significant_correlations(
+                            clinical_correlations_csv=csv_path,
+                            output_dir=output_dir,
+                            dpi=300
+                        )
+                        
+                        # Create combined figure
+                        create_combined_paper_figure(
+                            clinical_correlations_csv=csv_path,
+                            output_dir=output_dir,
+                            dpi=300
+                        )
+                        
+                        log_and_print_test("\n✓ Paper-ready visualizations complete!")
+                        log_and_print_test(f"   Saved to: {output_dir}/")
+                        
+                    except Exception as e:
+                        log_and_print_test(f"[WARNING] Visualization failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    log_and_print_test(f"\n[INFO] No significant correlations found (FDR < 0.05)")
+                    log_and_print_test(f"       Skipping paper-ready visualizations")
+                    log_and_print_test(f"       Check uncorrected p-values in: clinical_correlations_all.csv")
+                
+            except Exception as e:
+                log_and_print_test(f"[WARNING] Clinical analysis failed: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            log_and_print_test("\n[ERROR] regional_subject_roi_data not available or missing ROI_Name!")
+            log_and_print_test("  Cannot perform clinical analysis.")
+
+    results_dir = save_dir  # Dein results directory
+    csv_path = f"{results_dir}/clinical_correlations_significant.csv"
+    output_dir = f"{results_dir}/figures/paper_ready"
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Erstelle alle Figures
+    create_paper_figure_significant_correlations(
+        clinical_correlations_csv=csv_path,
+        output_dir=output_dir,
+        dpi=300
+    )
+
+    # Optional: Combined 4-panel figure
+    create_combined_paper_figure(
+        clinical_correlations_csv=csv_path,
+        output_dir=output_dir,
+        dpi=300
+    )
     # ==================================================================================
     # FINAL SUMMARY
     # ==================================================================================

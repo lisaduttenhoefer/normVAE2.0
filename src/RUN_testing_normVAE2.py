@@ -327,7 +327,20 @@ def main(args):
         n = (patients['Diagnosis'] == diag).sum()
         if n > 0:
             log_and_print_test(f"    {diag}: {n}")
-    # ========== END REPLACEMENT ==========
+
+    # ========== FIX: ADD PATIENTS TO TEST METADATA ==========
+    log_and_print_test(f"\n[INFO] Combining test HC with patients...")
+    log_and_print_test(f"  Test HC: {len(test_metadata)}")
+    log_and_print_test(f"  Patients: {len(patients)}")
+
+    # Combine test HCs + all patients
+    test_metadata = pd.concat([test_metadata, patients], ignore_index=True)
+
+    log_and_print_test(f"  ✓ Combined test metadata: {len(test_metadata)} subjects")
+    log_and_print_test(f"\nTest set composition:")
+    for diag, count in sorted(test_metadata['Diagnosis'].value_counts().items()):
+        log_and_print_test(f"  {diag}: {count}")
+    # ========== END FIX ==========
 
     # ========== BRANCH: Load harmonized OR normalized data ==========
     

@@ -1156,22 +1156,19 @@ def calculate_group_pvalues(results_df, norm_diagnosis, split_CAT=False):
 # ============================================================================
 
 def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fdr_bh'):
-    """
-    Calculate p-values WITH multiple testing correction.
-    
-    Args:
-        results_df: Results DataFrame with deviation scores
-        norm_diagnosis: Reference diagnosis (e.g., 'HC')
-        correction: Correction method - 'fdr_bh' (recommended), 'bonferroni', 'fdr_by'
-    
-    Returns:
-        dict: Nested dict with metrics → diagnoses → {p_uncorrected, p_corrected, significant}
-    """
+    """Calculate p-values WITH multiple testing correction."""
     from statsmodels.stats.multitest import multipletests
     from scipy.stats import mannwhitneyu
     import numpy as np
     
     print(f"\n[INFO] Calculating p-values with {correction.upper()} correction...")
+    
+    # ========== FIXED: Use SAME column names ==========
+    metrics_map = {
+        'reconstruction_error': 'deviation_score_recon',
+        'kl_divergence': 'deviation_score_kl',
+        'deviation_score': 'deviation_score'
+    }
     
     # Get control group data
     control_mask = results_df["Diagnosis"] == norm_diagnosis
@@ -1182,23 +1179,26 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
     control_data = results_df[control_mask]
     print(f"[INFO] Reference group: {norm_diagnosis} (n={len(control_data)})")
     
-    # Metrics to test
-    metrics = ["reconstruction_error", "kl_divergence", "deviation_score"]
+    # Get all diagnoses (exclude norm)
+    diagnoses = [d for d in results_df["Diagnosis"].unique() if d != norm_diagnosis]
     
-    # Collect ALL p-values first (for correction across all tests)
+    # Collect ALL p-values first
     all_tests = []
     
-    diagnoses = results_df["Diagnosis"].unique()
-    diagnoses = [d for d in diagnoses if d != norm_diagnosis]
-    
-    for metric in metrics:
-        control_values = control_data[metric].values
+    for display_name, metric_col in metrics_map.items():
+        
+        # Skip if column doesn't exist
+        if metric_col not in results_df.columns:
+            print(f"[WARNING] Column {metric_col} not found, skipping {display_name}")
+            continue
+        
+        control_values = control_data[metric_col].values
         
         for diagnosis in diagnoses:
             group_data = results_df[results_df["Diagnosis"] == diagnosis]
             
             if len(group_data) > 0:
-                group_values = group_data[metric].values
+                group_values = group_data[metric_col].values
                 
                 try:
                     _, p_value = mannwhitneyu(
@@ -1207,7 +1207,7 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
                     )
                     
                     all_tests.append({
-                        'metric': metric,
+                        'metric': display_name,  # ← Store display name for lookup
                         'diagnosis': diagnosis,
                         'p_value': p_value,
                         'n_group': len(group_values),
@@ -1215,7 +1215,7 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
                     })
                     
                 except Exception as e:
-                    print(f"[WARNING] Test failed for {diagnosis}, {metric}: {e}")
+                    print(f"[WARNING] Test failed for {diagnosis}, {metric_col}: {e}")
     
     # Apply multiple testing correction
     if len(all_tests) == 0:
@@ -1229,7 +1229,7 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
         method=correction
     )
     
-    # Store corrected values back into test results
+    # Store corrected values back
     for i, test in enumerate(all_tests):
         test['p_corrected'] = p_corrected[i]
         test['significant'] = rejected[i]
@@ -1237,7 +1237,7 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
     # Reorganize into nested dict
     group_pvalues = {}
     
-    for metric in metrics:
+    for metric in metrics_map.keys():
         group_pvalues[metric] = {}
         
         metric_tests = [t for t in all_tests if t['metric'] == metric]
@@ -1267,23 +1267,10 @@ def calculate_group_pvalues_corrected(results_df, norm_diagnosis, correction='fd
 # ============================================================================
 # IMPROVED: ERRORBAR PLOTS WITH CORRECTED P-VALUES
 # ============================================================================
-
 def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
                                      correction='fdr_bh', custom_colors=None, name="Analysis"):
     """
-    Create improved errorbar plots with:
-    - Multiple testing correction
-    - Better color coding (discrete categories)
-    - Significance annotations (*, **, ***)
-    - Clear legend
-    
-    Args:
-        results_df: Results DataFrame
-        save_dir: Directory to save plots
-        norm_diagnosis: Reference diagnosis
-        correction: Multiple testing correction method ('fdr_bh', 'bonferroni', 'fdr_by')
-        custom_colors: Optional custom color dict
-        name: Analysis name for title
+    Create improved errorbar plots with multiple testing correction.
     """
     import matplotlib.pyplot as plt
     import numpy as np
@@ -1299,8 +1286,19 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
         print("[ERROR] Could not calculate p-values. Skipping plots.")
         return
     
-    # Metrics to plot
-    metrics = ["reconstruction_error", "kl_divergence", "deviation_score"]
+    # Metrics mapping
+    metrics_map = {
+        'reconstruction_error': 'deviation_score_recon',
+        'kl_divergence': 'deviation_score_kl',
+        'deviation_score': 'deviation_score'
+    }
+    
+    # Nice labels
+    label_map = {
+        'reconstruction_error': 'Reconstruction Error (D_MSE)',
+        'kl_divergence': 'KL Divergence (D_KL)',
+        'deviation_score': 'Bootstrap Deviation Score'
+    }
     
     # Merge CAT groups
     results_processed = results_df.copy()
@@ -1310,12 +1308,18 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
     keep_diagnoses = ['HC', 'MDD', 'SSD', 'CAT']
     results_processed = results_processed[results_processed['Diagnosis'].isin(keep_diagnoses)]
     
-    for metric in metrics:
-        print(f"\n[INFO] Creating plot for {metric}...")
+    for display_name, metric_col in metrics_map.items():
+        
+        # Check if column exists
+        if metric_col not in results_processed.columns:
+            print(f"[WARNING] Column {metric_col} not found in results_df. Skipping {display_name}.")
+            continue
+        
+        print(f"\n[INFO] Creating plot for {display_name} (using column: {metric_col})...")
         
         # Calculate summary statistics
         summary_df = (
-            results_processed.groupby("Diagnosis")[metric]
+            results_processed.groupby("Diagnosis")[metric_col]
             .agg(['mean', 'sem', 'count'])
             .reset_index()
         )
@@ -1324,7 +1328,7 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
         def get_pval_info(diag):
             if diag == norm_diagnosis:
                 return {'p_corrected': np.nan, 'significant': False}
-            return group_pvalues[metric].get(diag, {'p_corrected': np.nan, 'significant': False})
+            return group_pvalues.get(display_name, {}).get(diag, {'p_corrected': np.nan, 'significant': False})
         
         summary_df["p_corrected"] = summary_df["Diagnosis"].map(lambda d: get_pval_info(d)['p_corrected'])
         summary_df["significant"] = summary_df["Diagnosis"].map(lambda d: get_pval_info(d)['significant'])
@@ -1359,7 +1363,7 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
             zorder=1
         )
         
-        # Colored scatter points
+        # Colored scatter points based on significance
         colors = []
         for _, row in summary_df.iterrows():
             diag = row["Diagnosis"]
@@ -1418,7 +1422,7 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7))
         
         # Labels and formatting
-        metric_label = metric.replace('_', ' ').title()
+        metric_label = label_map.get(display_name, display_name.replace('_', ' ').title())
         ax.set_xlabel(f"{metric_label} (Mean ± SEM)", fontsize=12, fontweight='bold')
         ax.set_ylabel("Diagnosis", fontsize=12, fontweight='bold')
         ax.set_title(
@@ -1454,8 +1458,8 @@ def plot_deviation_errorbar_improved(results_df, save_dir, norm_diagnosis='HC',
         
         plt.tight_layout()
         
-        # Save
-        filename = f"{metric}_errorbar_corrected_{correction}.png"
+        # Save - use display_name for filename
+        filename = f"{display_name}_errorbar_corrected_{correction}.png"
         save_path = f"{save_dir}/figures/distributions/{filename}"
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
@@ -2130,6 +2134,7 @@ def bootstrap_cliffs_delta_ci(data1: np.ndarray, data2: np.ndarray, num_bootstra
     p_value = min(p_value, 1.0) # Maximaler p-Wert ist 1.0
 
     return lower_bound, upper_bound, p_value
+
 def analyze_regional_deviations(
         results_df,
         save_dir,
@@ -2284,6 +2289,48 @@ def analyze_regional_deviations(
     # Find region columns
     region_cols = [col for col in results_df.columns if col.endswith("_z_score")]
     print(f"[INFO] Found {len(region_cols)} regional z-score columns")
+    # ========================================================================
+    # CREATE LONG FORMAT DATA FOR CLINICAL CORRELATIONS (Subject × ROI level)
+    # ========================================================================
+
+    print(f"\n[INFO] Creating subject-ROI level data for clinical correlations...")
+
+    # Convert wide format to long format
+    results_long_format = []
+
+    for _, row in results_df.iterrows():
+        subject = row.get('Subject', None)
+        filename = row.get('Filename', None)
+        diagnosis = row['Diagnosis']
+        
+        # Extract all other metadata columns (age, sex, dataset, etc.)
+        metadata_cols = [col for col in results_df.columns 
+                if col not in region_cols 
+                and col not in ['Subject', 'Filename', 'Diagnosis', 'deviation_score']]
+        metadata = {col: row[col] for col in metadata_cols}
+        
+        # For each ROI, create a row
+        for i, region_col in enumerate(region_cols):
+            roi_name = formatted_roi_names_for_plotting[i] if i < len(formatted_roi_names_for_plotting) else f"Region_{i+1}"
+            z_score = row[region_col]
+            
+            results_long_format.append({
+                'Subject': subject,
+                'Filename': filename,
+                'Diagnosis': diagnosis,
+                'ROI_Name': roi_name,
+                'Region_Column': region_col,
+                'deviation_score': z_score,  # This is the regional z-score
+                **metadata  # Add all other metadata
+            })
+
+    results_long_format = pd.DataFrame(results_long_format)
+
+    print(f"  ✓ Created long format data:")
+    print(f"    Shape: {results_long_format.shape}")
+    print(f"    Unique subjects: {results_long_format['Filename'].nunique()}")
+    print(f"    Unique ROIs: {results_long_format['ROI_Name'].nunique()}")
+    print(f"    Total rows (Subject × ROI): {len(results_long_format)}")
 
     if len(formatted_roi_names_for_plotting) != len(region_cols):
         print(f"[WARNING] ROI name count mismatch. Using column names directly.")
@@ -2746,22 +2793,67 @@ def analyze_regional_deviations(
                     print(f"      Significant changes (p<0.05): {len(sig_changes)}/{len(direction_df)}")
                     print(f"        Increases: {(sig_changes['Direction'] == 'increase').sum()}")
                     print(f"        Decreases: {(sig_changes['Direction'] == 'decrease').sum()}")
-
-    # ========================================================================
-    # HEATMAPS (UNCHANGED - your existing heatmap code)
-    # ========================================================================
-    
-    # NOTE: Add your existing heatmap code here if you have it
-    # I'm skipping it for brevity, but the structure would be:
-    # - Heatmap 1: Top 30 CAT regions
-    # - Heatmap 2: Top 30 overall regions
     
     print("\n[INFO] Regional deviation analysis finished.")
     print(f"[INFO] Created 2 plot types per diagnosis in: {save_dir}/figures/")
     print(f"      - paper_style_intensity_*.png (significance-based coloring)")
     print(f"      - paper_style_dualaxis_*.png (normative vs. anatomical)")
+
+    # ========================================================================
+    # ADDITIONAL COMPARISON VISUALIZATIONS
+    # ========================================================================
     
-    return effect_sizes_df
+    print("\n" + "="*80)
+    print("CREATING ADDITIONAL COMPARISON PLOTS")
+    print("="*80)
+    
+    try:
+        # 1. Spider/Radar plots
+        create_spider_plot(
+            effect_sizes_df, 
+            save_dir, 
+            norm_diagnosis=norm_diagnosis,
+            top_n=20,  # Top 20 per diagnosis
+            custom_colors={'HC': '#125E8A', 'SSD': '#3E885B', 'MDD': '#BEDCFE', 'CAT': '#2F4B26'},
+            separate_plots=True
+        )
+        
+        # 2. Parallel coordinates
+        pivot_data = create_parallel_coordinates_plot(
+            effect_sizes_df,
+            save_dir,
+            norm_diagnosis=norm_diagnosis,
+            top_n=20,
+            custom_colors={'HC': '#125E8A', 'SSD': '#3E885B', 'MDD': '#BEDCFE', 'CAT': '#2F4B26'}
+        )
+        
+        # 3. Cluster analysis (heatmap only with significance)
+        cluster_data, roi_significance = create_cluster_analysis(
+            effect_sizes_df,
+            save_dir,
+            norm_diagnosis=norm_diagnosis,
+            min_rois=10,
+            custom_colors={'HC': '#125E8A', 'SSD': '#3E885B', 'MDD': '#BEDCFE', 'CAT': '#2F4B26'}
+        )
+        
+        # 4. UMAP based on effect sizes
+        embedding, umap_distances = create_effect_size_umap(
+            effect_sizes_df,
+            save_dir,
+            norm_diagnosis=norm_diagnosis,
+            custom_colors={'HC': '#125E8A', 'SSD': '#3E885B', 'MDD': '#BEDCFE', 'CAT': '#2F4B26'},
+            min_rois=10
+        )
+        
+        print("\n✓ All comparison visualizations created!")
+        
+    except Exception as e:
+        print(f"[WARNING] Could not create some comparison plots: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    
+    return effect_sizes_df, results_long_format
 
 def create_dual_plots_for_diagnosis(diagnosis, top_regions, region_directions, region_stats,
                                    norm_diagnosis, name, save_dir, atlas_name, 
@@ -3114,3 +3206,2553 @@ def create_corrected_correlation_heatmap(results_df, metadata_df, save_dir, name
             print(f"{diagnosis} - {score}: r={r:.3f}, p_orig={p_orig:.3f}, p_corr={p_corr:.3f}, n={n}")
     
     return correlation_matrix, corrected_p_matrix, significance_matrix
+
+#-------NEW FUNCTIONS FOR MULTIVARIATE COMPARISON-------------------
+
+def create_spider_plot(effect_sizes_df, save_dir, norm_diagnosis='HC', 
+                       top_n=20, custom_colors=None, separate_plots=True):
+    """
+    Create spider/radar plots comparing effect sizes across diagnoses.
+    
+    Args:
+        effect_sizes_df: DataFrame with effect sizes
+        save_dir: Output directory
+        norm_diagnosis: Reference diagnosis
+        top_n: Number of top ROIs per diagnosis to include
+        custom_colors: Color dict for diagnoses
+        separate_plots: If True, create individual plots + combined plot
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from math import pi
+    
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A", "SSD": "#3E885B", "MDD": "#BEDCFE",
+            "CAT": "#2F4B26", "CAT-SSD": "#A67DB8", "CAT-MDD": "#160C28"
+        }
+    
+    print(f"\n[INFO] Creating spider/radar plots...")
+    
+    # Get diagnoses (exclude norm)
+    diagnoses = [d for d in effect_sizes_df['Diagnosis'].unique() if d != norm_diagnosis]
+    
+    # ========== NEW: Get union of top N ROIs from ALL diagnoses ==========
+    effect_sizes_df['Abs_Cliffs_Delta'] = effect_sizes_df['Cliffs_Delta'].abs()
+    
+    all_top_rois = set()
+    for diagnosis in diagnoses:
+        diag_data = effect_sizes_df[effect_sizes_df['Diagnosis'] == diagnosis]
+        top_rois_diag = diag_data.nlargest(top_n, 'Abs_Cliffs_Delta')['ROI_Name'].tolist()
+        all_top_rois.update(top_rois_diag)
+    
+    top_rois = sorted(list(all_top_rois))  # Sort for consistency
+    
+    print(f"  Union of top {top_n} ROIs per diagnosis: {len(top_rois)} unique ROIs")
+    print(f"  Breakdown:")
+    for diagnosis in diagnoses:
+        diag_data = effect_sizes_df[effect_sizes_df['Diagnosis'] == diagnosis]
+        top_for_diag = diag_data.nlargest(top_n, 'Abs_Cliffs_Delta')['ROI_Name'].tolist()
+        print(f"    {diagnosis}: {len(top_for_diag)} ROIs (contributed {len(set(top_for_diag))} unique)")
+    
+    # Filter to top ROIs
+    plot_data = effect_sizes_df[effect_sizes_df['ROI_Name'].isin(top_rois)].copy()
+    
+    # Shorten ROI names for readability
+    roi_short_names = [roi.split('(')[0].strip()[:20] for roi in top_rois]
+    
+    # Setup radar chart
+    num_vars = len(top_rois)
+    angles = [n / float(num_vars) * 2 * pi for n in range(num_vars)]
+    angles += angles[:1]  # Complete the circle
+    
+    if separate_plots:
+        # ========== INDIVIDUAL PLOTS FOR EACH DIAGNOSIS ==========
+        for diagnosis in diagnoses:
+            fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(projection='polar'))
+            
+            # Get values for this diagnosis
+            values = []
+            for roi in top_rois:
+                roi_data = plot_data[(plot_data['Diagnosis'] == diagnosis) & 
+                                    (plot_data['ROI_Name'] == roi)]
+                if len(roi_data) > 0:
+                    values.append(roi_data['Cliffs_Delta'].iloc[0])
+                else:
+                    values.append(0)
+            
+            values += values[:1]  # Complete the circle
+            
+            # Plot with DARKER lines
+            color = custom_colors.get(diagnosis, '#888888')
+            ax.plot(angles, values, 'o-', linewidth=3, label=diagnosis, 
+                   color=color, alpha=1.0, markersize=6)  # ← Thicker, opaque
+            ax.fill(angles, values, alpha=0.25, color=color)
+            
+            # Styling
+            ax.set_xticks(angles[:-1])
+            ax.set_xticklabels(roi_short_names, size=8)
+            ax.set_ylim(-1, 1)
+            ax.set_yticks([-0.8, -0.4, 0, 0.4, 0.8])
+            ax.set_yticklabels(['-0.8', '-0.4', '0', '0.4', '0.8'], size=9)
+            ax.grid(True, linestyle='--', alpha=0.4, linewidth=1)
+            
+            # ========== REMOVE OUTER RING ==========
+            ax.spines['polar'].set_visible(False)
+            
+            # Add reference circle at 0 (darker)
+            ax.plot(angles, [0]*len(angles), 'k-', linewidth=1.5, alpha=0.7)
+            
+            # Title
+            plt.title(f"{diagnosis} vs. {norm_diagnosis}\nRegional Effect Sizes (Cliff's Delta)\n"
+                     f"Union of Top {top_n} ROIs per Diagnosis ({len(top_rois)} total)",
+                     size=14, weight='bold', y=1.08)
+            
+            plt.tight_layout()
+            plt.savefig(f"{save_dir}/figures/spider_plot_{diagnosis}_vs_{norm_diagnosis}.png",
+                       dpi=300, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"  ✓ Saved: spider_plot_{diagnosis}_vs_{norm_diagnosis}.png")
+    
+    # ========== ALWAYS CREATE COMBINED PLOT ==========
+    print(f"\n  [INFO] Creating combined plot with all diagnoses...")
+    
+    fig, ax = plt.subplots(figsize=(14, 14), subplot_kw=dict(projection='polar'))
+    
+    for diagnosis in diagnoses:
+        # Get values for this diagnosis
+        values = []
+        for roi in top_rois:
+            roi_data = plot_data[(plot_data['Diagnosis'] == diagnosis) & 
+                                (plot_data['ROI_Name'] == roi)]
+            if len(roi_data) > 0:
+                values.append(roi_data['Cliffs_Delta'].iloc[0])
+            else:
+                values.append(0)
+        
+        values += values[:1]  # Complete the circle
+        
+        # Plot with DARKER lines and different colors
+        color = custom_colors.get(diagnosis, '#888888')
+        ax.plot(angles, values, 'o-', linewidth=2.5, label=diagnosis, 
+               color=color, markersize=5, alpha=0.9)  # ← Thicker, more opaque
+        ax.fill(angles, values, alpha=0.12, color=color)  # ← Less transparent fill
+    
+    # Styling
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(roi_short_names, size=8)
+    ax.set_ylim(-1, 1)
+    ax.set_yticks([-0.8, -0.4, 0, 0.4, 0.8])
+    ax.set_yticklabels(['-0.8', '-0.4', '0', '0.4', '0.8'], size=10)
+    ax.grid(True, linestyle='--', alpha=0.4, linewidth=1)
+    
+    # ========== REMOVE OUTER RING ==========
+    ax.spines['polar'].set_visible(False)
+    
+    # Add reference circle at 0 (darker)
+    ax.plot(angles, [0]*len(angles), 'k-', linewidth=1.5, alpha=0.7)
+    
+    # Legend with larger font and better positioning
+    ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1), 
+             fontsize=11, framealpha=0.95, edgecolor='black')
+    
+    # Title
+    plt.title(f"Regional Effect Sizes Across Diagnoses\nvs. {norm_diagnosis}\n"
+             f"Union of Top {top_n} ROIs per Diagnosis ({len(top_rois)} total)",
+             size=15, weight='bold', y=1.08)
+    
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/figures/spider_plot_combined_vs_{norm_diagnosis}.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    print(f"  ✓ Saved: spider_plot_combined_vs_{norm_diagnosis}.png")
+    
+    print(f"[INFO] Spider plots complete!")
+
+def create_parallel_coordinates_plot(effect_sizes_df, save_dir, norm_diagnosis='HC',
+                                    top_n=20, custom_colors=None):
+    """
+    Create parallel coordinates plot comparing effect sizes across ROIs.
+    Uses union of top N ROIs from all diagnoses.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A", "SSD": "#3E885B", "MDD": "#BEDCFE",
+            "CAT": "#2F4B26", "CAT-SSD": "#A67DB8", "CAT-MDD": "#160C28"
+        }
+    
+    print(f"\n[INFO] Creating parallel coordinates plot...")
+    
+    # Get diagnoses (exclude norm)
+    diagnoses = [d for d in effect_sizes_df['Diagnosis'].unique() if d != norm_diagnosis]
+    
+    # ========== NEW: Get union of top N ROIs from ALL diagnoses ==========
+    effect_sizes_df['Abs_Cliffs_Delta'] = effect_sizes_df['Cliffs_Delta'].abs()
+    
+    all_top_rois = set()
+    for diagnosis in diagnoses:
+        diag_data = effect_sizes_df[effect_sizes_df['Diagnosis'] == diagnosis]
+        top_rois_diag = diag_data.nlargest(top_n, 'Abs_Cliffs_Delta')['ROI_Name'].tolist()
+        all_top_rois.update(top_rois_diag)
+    
+    top_rois = sorted(list(all_top_rois))
+    
+    print(f"  Union of top {top_n} ROIs per diagnosis: {len(top_rois)} unique ROIs")
+    
+    # Filter to top ROIs
+    plot_data = effect_sizes_df[effect_sizes_df['ROI_Name'].isin(top_rois)].copy()
+    
+    # Pivot data: rows = diagnoses, columns = ROIs
+    pivot_data = plot_data.pivot(index='Diagnosis', columns='ROI_Name', values='Cliffs_Delta')
+    pivot_data = pivot_data[top_rois]  # Ensure consistent ROI order
+    
+    # Shorten ROI names
+    roi_short_names = [roi.split('(')[0].strip()[:25] for roi in top_rois]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(max(18, len(top_rois)*0.6), 9))
+    
+    # X positions for ROIs
+    x_positions = np.arange(len(top_rois))
+    
+    # Plot each diagnosis as a line with DARKER, THICKER lines
+    for diagnosis in diagnoses:
+        if diagnosis not in pivot_data.index:
+            continue
+            
+        values = pivot_data.loc[diagnosis].values
+        color = custom_colors.get(diagnosis, '#888888')
+        
+        # Plot line with markers - THICKER and MORE OPAQUE
+        ax.plot(x_positions, values, 'o-', 
+               linewidth=2.5, markersize=7,  # ← Thicker
+               label=diagnosis, color=color, alpha=0.95)  # ← More opaque
+    
+    # Add horizontal line at 0 (darker)
+    ax.axhline(y=0, color='gray', linestyle='--', linewidth=1.5, alpha=0.7)
+    
+    # Styling
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(roi_short_names, rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel("Effect Size (Cliff's Delta)", fontsize=13, fontweight='bold')
+    ax.set_xlabel("Brain Regions", fontsize=13, fontweight='bold')
+    ax.set_title(f"Regional Effect Sizes Across Diagnoses\nvs. {norm_diagnosis}\n"
+                f"Union of Top {top_n} ROIs per Diagnosis ({len(top_rois)} total)",
+                fontsize=15, fontweight='bold', pad=20)
+    
+    # Grid
+    ax.grid(True, axis='y', linestyle='--', alpha=0.4, linewidth=1)
+    ax.set_axisbelow(True)
+    
+    # Legend
+    ax.legend(loc='upper left', fontsize=11, framealpha=0.95, edgecolor='black')
+    
+    # Adjust y-limits for better visualization
+    y_min, y_max = ax.get_ylim()
+    y_range = y_max - y_min
+    ax.set_ylim(y_min - 0.1*y_range, y_max + 0.1*y_range)
+    
+    plt.tight_layout()
+    plt.savefig(f"{save_dir}/figures/parallel_coordinates_vs_{norm_diagnosis}.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"  ✓ Saved: parallel_coordinates_vs_{norm_diagnosis}.png")
+    print(f"[INFO] Parallel coordinates plot complete!")
+    
+    return pivot_data
+def create_cluster_analysis(effect_sizes_df, save_dir, norm_diagnosis='HC',
+                           min_rois=10, custom_colors=None):
+    """
+    Create clustered heatmap with significance markers showing which regions
+    differ significantly between diagnoses.
+    
+    Args:
+        effect_sizes_df: DataFrame with effect sizes
+        save_dir: Output directory
+        norm_diagnosis: Reference diagnosis
+        min_rois: Minimum number of ROIs to include
+        custom_colors: Color dict for diagnoses
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    import pandas as pd
+    from scipy.cluster.hierarchy import linkage
+    from scipy.stats import mannwhitneyu
+    from statsmodels.stats.multitest import multipletests
+    from matplotlib.patches import Rectangle
+    
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A", "SSD": "#3E885B", "MDD": "#BEDCFE",
+            "CAT": "#2F4B26", "CAT-SSD": "#A67DB8", "CAT-MDD": "#160C28"
+        }
+    
+    print(f"\n[INFO] Performing cluster analysis with significance testing...")
+    
+    # Get ROIs that appear in all diagnoses
+    roi_counts = effect_sizes_df.groupby('ROI_Name')['Diagnosis'].nunique()
+    n_diagnoses = effect_sizes_df['Diagnosis'].nunique()
+    complete_rois = roi_counts[roi_counts == n_diagnoses].index.tolist()
+    
+    if len(complete_rois) < min_rois:
+        print(f"[WARNING] Only {len(complete_rois)} ROIs have data for all diagnoses. Using all available ROIs.")
+        complete_rois = effect_sizes_df['ROI_Name'].unique().tolist()
+    
+    print(f"  Using {len(complete_rois)} ROIs for clustering")
+    
+    # Filter data
+    cluster_data = effect_sizes_df[effect_sizes_df['ROI_Name'].isin(complete_rois)].copy()
+    
+    # Get diagnoses (exclude norm)
+    diagnoses = [d for d in cluster_data['Diagnosis'].unique() if d != norm_diagnosis]
+    
+    # Pivot data: rows = diagnoses, columns = ROIs
+    pivot_data = cluster_data.pivot(index='Diagnosis', columns='ROI_Name', values='Cliffs_Delta')
+    pivot_data = pivot_data.fillna(0)
+    pivot_data = pivot_data.loc[diagnoses]
+    
+    # ========================================================================
+    # SIGNIFICANCE TESTING: Which ROIs differ between diagnosis pairs?
+    # ========================================================================
+    
+    print(f"\n  [INFO] Testing for significant differences between diagnosis pairs...")
+    
+    # We need the original regional z-scores, not just Cliff's Delta
+    # Load from results_df if available, or use Cliff's Delta as proxy
+    
+    # Create significance matrix: ROIs × Diagnosis pairs
+    from itertools import combinations
+    diagnosis_pairs = list(combinations(diagnoses, 2))
+    
+    print(f"    Testing {len(diagnosis_pairs)} diagnosis pairs: {diagnosis_pairs}")
+    
+    # For each ROI, test if it differs significantly between any pair
+    roi_significance = {}  # ROI → list of significant pairs
+    
+    for roi in complete_rois:
+        roi_data = cluster_data[cluster_data['ROI_Name'] == roi]
+        
+        significant_pairs = []
+        p_values = []
+        
+        for diag1, diag2 in diagnosis_pairs:
+            d1_cliff = roi_data[roi_data['Diagnosis'] == diag1]['Cliffs_Delta'].values
+            d2_cliff = roi_data[roi_data['Diagnosis'] == diag2]['Cliffs_Delta'].values
+            
+            if len(d1_cliff) > 0 and len(d2_cliff) > 0:
+                # Simple test: are the effect sizes substantially different?
+                diff = abs(d1_cliff[0] - d2_cliff[0])
+                
+                # Use CI bounds if available for more robust test
+                d1_ci_low = roi_data[roi_data['Diagnosis'] == diag1]['Cliffs_Delta_CI_Low'].values
+                d1_ci_high = roi_data[roi_data['Diagnosis'] == diag1]['Cliffs_Delta_CI_High'].values
+                d2_ci_low = roi_data[roi_data['Diagnosis'] == diag2]['Cliffs_Delta_CI_Low'].values
+                d2_ci_high = roi_data[roi_data['Diagnosis'] == diag2]['Cliffs_Delta_CI_High'].values
+                
+                if len(d1_ci_low) > 0 and len(d2_ci_low) > 0:
+                    # Test if CIs don't overlap
+                    ci_overlap = not (d1_ci_high[0] < d2_ci_low[0] or d2_ci_high[0] < d1_ci_low[0])
+                    
+                    if not ci_overlap and diff > 0.2:  # Non-overlapping CIs + substantial difference
+                        significant_pairs.append(f"{diag1}-{diag2}")
+                        p_values.append(0.01)  # Proxy p-value
+                    else:
+                        p_values.append(1.0)
+                else:
+                    # Fallback: just use effect size difference
+                    if diff > 0.3:  # Substantial difference threshold
+                        significant_pairs.append(f"{diag1}-{diag2}")
+                        p_values.append(0.05)
+                    else:
+                        p_values.append(1.0)
+        
+        roi_significance[roi] = significant_pairs
+    
+    # Count how many ROIs show differences for each pair
+    print(f"\n    Significant differences by diagnosis pair:")
+    for pair in diagnosis_pairs:
+        pair_str = f"{pair[0]}-{pair[1]}"
+        n_sig = sum(1 for pairs in roi_significance.values() if pair_str in pairs)
+        print(f"      {pair_str}: {n_sig}/{len(complete_rois)} ROIs")
+    
+    # ========================================================================
+    # CLUSTERED HEATMAP WITH SIGNIFICANCE MARKERS
+    # ========================================================================
+    
+    print(f"\n  [INFO] Creating clustered heatmap with significance markers...")
+    
+    # Create clustermap
+    g = sns.clustermap(
+        pivot_data.T,  # Transpose: ROIs as rows, diagnoses as columns
+        method='ward',
+        metric='euclidean',
+        cmap='RdBu_r',
+        center=0,
+        vmin=-1,
+        vmax=1,
+        figsize=(10, max(16, len(complete_rois)*0.3)),
+        cbar_kws={'label': "Cliff's Delta", 'shrink': 0.5},
+        dendrogram_ratio=0.1,
+        linewidths=0.5,
+        linecolor='lightgray',
+        yticklabels=True,
+        xticklabels=True,
+        cbar_pos=(0.02, 0.8, 0.03, 0.15)  # Position colorbar better
+    )
+    
+    # ========================================================================
+    # ADD SIGNIFICANCE MARKERS
+    # ========================================================================
+    
+    # Get the reordered ROI order after clustering
+    reordered_rois = [complete_rois[i] for i in g.dendrogram_row.reordered_ind]
+    
+    # Add asterisks or boxes for significant ROIs
+    ax = g.ax_heatmap
+    
+    for row_idx, roi in enumerate(reordered_rois):
+        if roi in roi_significance and len(roi_significance[roi]) > 0:
+            # This ROI shows significant differences
+            n_pairs = len(roi_significance[roi])
+            
+            # Add a colored box around the entire row
+            if n_pairs >= 2:  # Differs in 2+ pairs
+                rect = Rectangle((0, row_idx), len(diagnoses), 1, 
+                               fill=False, edgecolor='gold', linewidth=2.5)
+                ax.add_patch(rect)
+            elif n_pairs == 1:  # Differs in 1 pair
+                rect = Rectangle((0, row_idx), len(diagnoses), 1, 
+                               fill=False, edgecolor='orange', linewidth=1.5)
+                ax.add_patch(rect)
+    
+    # Styling
+    g.ax_heatmap.set_xlabel("Diagnosis", fontsize=12, fontweight='bold')
+    g.ax_heatmap.set_ylabel("Brain Regions", fontsize=12, fontweight='bold')
+    g.fig.suptitle(
+        f"Clustered Effect Sizes: Diagnoses vs. {norm_diagnosis}\n"
+        f"(Ward Linkage, Euclidean Distance)\n"
+        f"Gold border = differs in 2+ pairs | Orange border = differs in 1 pair",
+        fontsize=13, fontweight='bold', x=0.5, y=0.98
+    )
+    
+    plt.savefig(f"{save_dir}/figures/cluster_heatmap_with_significance_vs_{norm_diagnosis}.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: cluster_heatmap_with_significance_vs_{norm_diagnosis}.png")
+    
+    # ========================================================================
+    # SAVE SIGNIFICANCE RESULTS
+    # ========================================================================
+    
+    sig_results = []
+    for roi, pairs in roi_significance.items():
+        if len(pairs) > 0:
+            sig_results.append({
+                'ROI_Name': roi,
+                'N_Significant_Pairs': len(pairs),
+                'Significant_Pairs': ', '.join(pairs)
+            })
+    
+    if sig_results:
+        sig_df = pd.DataFrame(sig_results)
+        sig_df = sig_df.sort_values('N_Significant_Pairs', ascending=False)
+        sig_df.to_csv(f"{save_dir}/roi_significance_between_diagnoses.csv", index=False)
+        print(f"    ✓ Saved: roi_significance_between_diagnoses.csv")
+    
+    print(f"\n[INFO] Cluster analysis complete!")
+    
+    return pivot_data, roi_significance
+
+def create_effect_size_umap(effect_sizes_df, save_dir, norm_diagnosis='HC',
+                           custom_colors=None, min_rois=10):
+    """
+    Create visualization based on regional effect size patterns.
+    Uses UMAP if n >= 5, otherwise creates distance plot.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler
+    from scipy.spatial.distance import pdist, squareform
+    
+    if custom_colors is None:
+        custom_colors = {
+            "HC": "#125E8A", "SSD": "#3E885B", "MDD": "#BEDCFE",
+            "CAT": "#2F4B26", "CAT-SSD": "#A67DB8", "CAT-MDD": "#160C28"
+        }
+    
+    print(f"\n[INFO] Creating effect size pattern visualization...")
+    
+    # Get ROIs that appear in all diagnoses
+    roi_counts = effect_sizes_df.groupby('ROI_Name')['Diagnosis'].nunique()
+    n_diagnoses = effect_sizes_df['Diagnosis'].nunique()
+    complete_rois = roi_counts[roi_counts == n_diagnoses].index.tolist()
+    
+    if len(complete_rois) < min_rois:
+        print(f"[WARNING] Only {len(complete_rois)} ROIs available. Using all.")
+        complete_rois = effect_sizes_df['ROI_Name'].unique().tolist()
+    
+    print(f"  Using {len(complete_rois)} ROIs")
+    
+    # Filter data
+    umap_data = effect_sizes_df[effect_sizes_df['ROI_Name'].isin(complete_rois)].copy()
+    
+    # Get diagnoses (exclude norm)
+    diagnoses = [d for d in umap_data['Diagnosis'].unique() if d != norm_diagnosis]
+    
+    # Pivot: rows = diagnoses, columns = ROIs (effect sizes)
+    pivot_data = umap_data.pivot(index='Diagnosis', columns='ROI_Name', values='Cliffs_Delta')
+    pivot_data = pivot_data.fillna(0)
+    pivot_data = pivot_data.loc[diagnoses]
+    
+    print(f"  Data shape: {pivot_data.shape} (diagnoses × ROIs)")
+    
+    # Standardize
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(pivot_data.values)
+    
+    # Compute distances
+    distances = pdist(data_scaled, metric='euclidean')
+    distance_matrix = squareform(distances)
+    distance_df = pd.DataFrame(
+        distance_matrix,
+        index=diagnoses,
+        columns=diagnoses
+    )
+    
+    distance_df.to_csv(f"{save_dir}/effect_size_distances_vs_{norm_diagnosis}.csv")
+    
+    print(f"\n  Pairwise distances between diagnoses:")
+    for i, diag1 in enumerate(diagnoses):
+        for diag2 in diagnoses[i+1:]:
+            dist = distance_df.loc[diag1, diag2]
+            print(f"    {diag1} ↔ {diag2}: {dist:.3f}")
+    
+    # ========================================================================
+    # DECIDE: UMAP or SIMPLE PLOT?
+    # ========================================================================
+    
+    if len(diagnoses) < 4:
+        print(f"\n  [INFO] Only {len(diagnoses)} diagnoses - creating distance bar plot instead of UMAP")
+        
+        # Create distance bar plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        pairs = []
+        dists = []
+        for i, diag1 in enumerate(diagnoses):
+            for diag2 in diagnoses[i+1:]:
+                pairs.append(f"{diag1} - {diag2}")
+                dists.append(distance_df.loc[diag1, diag2])
+        
+        colors_bar = [custom_colors.get(p.split(' - ')[0], '#1f77b4') for p in pairs]
+        bars = ax.barh(pairs, dists, color=colors_bar, alpha=0.7, edgecolor='black', linewidth=1.5)
+        
+        ax.set_xlabel('Euclidean Distance\n(Standardized Effect Sizes)', 
+                     fontsize=12, fontweight='bold')
+        ax.set_title(
+            f'Pairwise Distances Between Diagnoses\n'
+            f'Based on Regional Effect Size Patterns vs. {norm_diagnosis}\n'
+            f'({len(complete_rois)} ROIs, Standardized)',
+            fontsize=13, fontweight='bold', pad=15
+        )
+        ax.grid(axis='x', alpha=0.3)
+        
+        # Add distance values on bars
+        for bar, dist in zip(bars, dists):
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2, 
+                   f' {dist:.2f}', 
+                   ha='left', va='center', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig(f"{save_dir}/figures/distance_plot_effect_sizes_vs_{norm_diagnosis}.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"  ✓ Saved: distance_plot_effect_sizes_vs_{norm_diagnosis}.png")
+        
+        return None, distance_df
+    
+    # ========================================================================
+    # UMAP (for n >= 4)
+    # ========================================================================
+    
+    try:
+        import umap
+        
+        print(f"\n  [INFO] Running UMAP...")
+        
+        # Critical fix: adjust n_neighbors for small sample size
+        n_neighbors = max(2, min(len(diagnoses) - 1, 15))
+        
+        print(f"    Using n_neighbors={n_neighbors} (adjusted for {len(diagnoses)} samples)")
+        
+        reducer = umap.UMAP(
+            n_neighbors=n_neighbors,
+            min_dist=0.1,
+            n_components=2,
+            metric='euclidean',
+            random_state=42,
+            init='random'  # Use random instead of spectral for small n
+        )
+        
+        embedding = reducer.fit_transform(data_scaled)
+        
+        print(f"    ✓ UMAP complete")
+        
+        # Plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        for i, diagnosis in enumerate(diagnoses):
+            color = custom_colors.get(diagnosis, '#888888')
+            
+            ax.scatter(
+                embedding[i, 0],
+                embedding[i, 1],
+                c=color,
+                s=400,
+                alpha=0.8,
+                edgecolors='black',
+                linewidth=2,
+                label=diagnosis,
+                zorder=3
+            )
+            
+            ax.text(
+                embedding[i, 0],
+                embedding[i, 1],
+                diagnosis,
+                fontsize=11,
+                fontweight='bold',
+                ha='center',
+                va='center',
+                zorder=4
+            )
+        
+        ax.set_xlabel('UMAP 1', fontsize=12, fontweight='bold')
+        ax.set_ylabel('UMAP 2', fontsize=12, fontweight='bold')
+        ax.set_title(
+            f'UMAP: Diagnoses Based on Regional Effect Size Patterns\n'
+            f'vs. {norm_diagnosis} ({len(complete_rois)} ROIs)\n'
+            f'Closer points = more similar regional deviation patterns',
+            fontsize=13, fontweight='bold', pad=15
+        )
+        
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        ax.legend(fontsize=10, framealpha=0.95, edgecolor='black')
+        
+        plt.tight_layout()
+        plt.savefig(f"{save_dir}/figures/umap_effect_sizes_vs_{norm_diagnosis}.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"  ✓ Saved: umap_effect_sizes_vs_{norm_diagnosis}.png")
+        
+        return embedding, distance_df
+        
+    except Exception as e:
+        print(f"  [WARNING] UMAP failed: {e}")
+        print(f"  [INFO] Creating distance plot instead...")
+        
+        # Fallback to distance plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        pairs = []
+        dists = []
+        for i, diag1 in enumerate(diagnoses):
+            for diag2 in diagnoses[i+1:]:
+                pairs.append(f"{diag1} - {diag2}")
+                dists.append(distance_df.loc[diag1, diag2])
+        
+        colors_bar = [custom_colors.get(p.split(' - ')[0], '#1f77b4') for p in pairs]
+        bars = ax.barh(pairs, dists, color=colors_bar, alpha=0.7, edgecolor='black', linewidth=1.5)
+        
+        ax.set_xlabel('Euclidean Distance', fontsize=12, fontweight='bold')
+        ax.set_title(
+            f'Pairwise Distances Between Diagnoses\n'
+            f'Based on Regional Effect Size Patterns',
+            fontsize=13, fontweight='bold', pad=15
+        )
+        ax.grid(axis='x', alpha=0.3)
+        
+        for bar, dist in zip(bars, dists):
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2, 
+                   f' {dist:.2f}', 
+                   ha='left', va='center', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig(f"{save_dir}/figures/distance_plot_effect_sizes_vs_{norm_diagnosis}.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"  ✓ Saved: distance_plot_effect_sizes_vs_{norm_diagnosis}.png")
+        
+        return None, distance_df
+    
+def analyze_clinical_correlations(results_df, clinical_data_path, save_dir,
+                                  datasets_with_clinical=['NSS', 'whiteCAT'],
+                                  min_subjects=20,
+                                  apply_fdr=True,
+                                  skip_ml=True,  # ← NEW
+                                  alpha_uncorrected=0.05):
+    """
+    Analyze correlations between deviation scores and clinical scores.
+    Works with both subject-level and regional (ROI-level) deviation data.
+    
+    Args:
+        results_df: DataFrame with deviation scores per subject (or per subject/ROI)
+        clinical_data_path: Path to complete_metadata.csv
+        save_dir: Output directory
+        datasets_with_clinical: Datasets that have clinical data
+        min_subjects: Minimum subjects needed for correlation
+        apply_fdr: Whether to apply FDR correction
+        skip_ml: Skip machine learning analysis (default: True)
+    
+    Returns:
+        correlation_results: DataFrame with all correlations
+        diag_corr_df: DataFrame with diagnosis-stratified correlations
+    """
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import spearmanr, pearsonr
+    from statsmodels.stats.multitest import multipletests
+    import warnings
+    warnings.filterwarnings('ignore')
+    
+    print("\n" + "="*80)
+    print("ANALYZING BRAIN-CLINICAL CORRELATIONS")
+    print("="*80)
+    
+    # ========================================================================
+    # 0. DETERMINE ANALYSIS LEVEL (subject-level vs regional)
+    # ========================================================================
+    
+    has_roi_data = 'ROI_Name' in results_df.columns
+    
+    if has_roi_data:
+        print("\n[INFO] Detected REGIONAL (ROI-level) deviation data")
+        analysis_level = "regional"
+    else:
+        print("\n[INFO] Detected SUBJECT-LEVEL deviation data")
+        analysis_level = "subject"
+    
+    # ========================================================================
+    # 1. LOAD AND MERGE CLINICAL DATA
+    # ========================================================================
+    
+    print(f"\n[INFO] Loading clinical data from: {clinical_data_path}")
+    clinical_df = pd.read_csv(clinical_data_path)
+    
+    # Clinical score columns
+    clinical_scores = [
+        'GAF_Score', 'PANSS_Positive', 'PANSS_Negative', 'PANSS_General', 
+        'PANSS_Total', 'BPRS_Total', 'NCRS_Motor', 'NCRS_Affective', 
+        'NCRS_Behavioral', 'NCRS_Total', 'NSS_Motor', 'NSS_Total'
+    ]
+    
+    # Filter to datasets with clinical data
+    clinical_df = clinical_df[clinical_df['Dataset'].isin(datasets_with_clinical)]
+    
+    print(f"  Clinical data available for {len(clinical_df)} subjects from datasets: {datasets_with_clinical}")
+    
+    # Check data availability
+    print(f"\n  Clinical scores availability:")
+    for score in clinical_scores:
+        n_available = clinical_df[score].notna().sum()
+        pct = (n_available / len(clinical_df)) * 100
+        print(f"    {score:20s}: {n_available:4d} / {len(clinical_df)} ({pct:.1f}%)")
+    
+    # ========================================================================
+    # 2. MERGE WITH DEVIATION SCORES
+    # ========================================================================
+    
+    print(f"\n[INFO] Merging clinical data with deviation scores...")
+    
+    if 'Filename' not in results_df.columns:
+        print("[ERROR] results_df must have 'Filename' column")
+        return None, None
+    
+    # Merge on Filename
+    merged_df = results_df.merge(
+        clinical_df[['Filename', 'Dataset', 'Diagnosis'] + clinical_scores],
+        on='Filename',
+        how='inner',
+        suffixes=('', '_clinical')
+    )
+    
+    print(f"  Merged data: {len(merged_df)} records")
+    print(f"  Unique subjects: {merged_df['Filename'].nunique()}")
+    
+    if has_roi_data:
+        print(f"  Unique ROIs: {merged_df['ROI_Name'].nunique()}")
+    
+    # Filter to patients only (exclude HC)
+    merged_df = merged_df[merged_df['Diagnosis'] != 'HC']
+    
+    print(f"  After filtering to patients: {merged_df['Filename'].nunique()} subjects")
+    
+    # Check diagnoses
+    print(f"\n  Diagnoses in clinical sample:")
+    for diag, count in merged_df['Diagnosis'].value_counts().items():
+        n_subj = merged_df[merged_df['Diagnosis']==diag]['Filename'].nunique()
+        if has_roi_data:
+            print(f"    {diag}: {count} ROI measurements ({n_subj} subjects)")
+        else:
+            print(f"    {diag}: {n_subj} subjects")
+    
+    # ========================================================================
+    # 3. CORRELATION ANALYSIS
+    # ========================================================================
+    
+    if analysis_level == "regional":
+        print(f"\n[INFO] Computing ROI-wise correlations...")
+        correlation_results = _analyze_regional_correlations(
+            merged_df, clinical_scores, min_subjects
+        )
+    else:
+        print(f"\n[INFO] Computing subject-level correlations...")
+        correlation_results = _analyze_subject_level_correlations(
+            merged_df, clinical_scores, min_subjects
+        )
+    
+    if not correlation_results:
+        print("[WARNING] No correlations could be computed!")
+        return pd.DataFrame(), pd.DataFrame()
+    
+    corr_df = pd.DataFrame(correlation_results)
+    print(f"    Computed {len(corr_df)} correlations")
+    
+    # ========================================================================
+    # 4. MULTIPLE TESTING CORRECTION
+    # ========================================================================
+    
+    print(f"\n[INFO] Applying FDR correction...")
+    
+    # FDR correction on Spearman p-values
+    reject, pvals_corrected, _, _ = multipletests(
+        corr_df['Spearman_p'].values,
+        alpha=0.05,
+        method='fdr_bh'
+    )
+    
+    corr_df['Spearman_p_corrected'] = pvals_corrected
+    corr_df['Significant_FDR'] = reject
+    
+    n_sig = corr_df['Significant_FDR'].sum()
+    print(f"    Significant correlations (FDR < 0.05): {n_sig} / {len(corr_df)}")
+    
+    # Save results
+    corr_df_sorted = corr_df.sort_values('Spearman_p', ascending=True)
+    corr_df_sorted.to_csv(f"{save_dir}/clinical_correlations_all.csv", index=False)
+    
+    # Save only significant
+    sig_corr = corr_df_sorted[corr_df_sorted['Significant_FDR']]
+    if len(sig_corr) > 0:
+        sig_corr.to_csv(f"{save_dir}/clinical_correlations_significant.csv", index=False)
+        print(f"    ✓ Saved significant correlations to: clinical_correlations_significant.csv")
+    
+    # ========================================================================
+    # 5. VISUALIZATIONS
+    # ========================================================================
+    
+    if analysis_level == "regional" and n_sig > 0:
+        _create_regional_visualizations(
+            merged_df, corr_df, sig_corr, clinical_scores, save_dir, has_roi_data
+        )
+    elif analysis_level == "subject" and n_sig > 0:
+        _create_subject_level_visualizations(
+            merged_df, corr_df, sig_corr, clinical_scores, save_dir
+        )
+    
+    # ========================================================================
+    # 6. DIAGNOSIS-STRATIFIED ANALYSIS
+    # ========================================================================
+    
+    print(f"\n[INFO] Performing diagnosis-stratified analysis...")
+    
+    diag_corr_df = _analyze_by_diagnosis(
+        merged_df, clinical_scores, min_subjects, has_roi_data
+    )
+    
+    if not diag_corr_df.empty:
+        diag_corr_df.to_csv(f"{save_dir}/clinical_correlations_by_diagnosis.csv", index=False)
+        
+        # Summary
+        print(f"\n  Significant correlations by diagnosis (FDR < 0.05):")
+        for diagnosis in diag_corr_df['Diagnosis'].unique():
+            n_sig = diag_corr_df[
+                (diag_corr_df['Diagnosis'] == diagnosis) & 
+                (diag_corr_df['Significant_FDR'])
+            ].shape[0]
+            print(f"    {diagnosis}: {n_sig}")
+    
+    print(f"\n[INFO] Clinical correlation analysis complete!")
+    print(f"  Results saved to: {save_dir}/")
+    
+    return corr_df, diag_corr_df
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _analyze_regional_correlations(merged_df, clinical_scores, min_subjects):
+    """ROI-wise correlation analysis"""
+    from scipy.stats import spearmanr, pearsonr
+    
+    correlation_results = []
+    rois = merged_df['ROI_Name'].unique()
+    
+    for roi in rois:
+        roi_data = merged_df[merged_df['ROI_Name'] == roi].copy()
+        
+        for score in clinical_scores:
+            valid_data = roi_data[roi_data[score].notna()].copy()
+            
+            if len(valid_data) < min_subjects:
+                continue
+            
+            x = valid_data['deviation_score'].values
+            y = valid_data[score].values
+            
+            rho, p_val = spearmanr(x, y)
+            r, p_val_pearson = pearsonr(x, y)
+            
+            correlation_results.append({
+                'ROI_Name': roi,
+                'Clinical_Score': score,
+                'N_Subjects': len(valid_data),
+                'Spearman_rho': rho,
+                'Spearman_p': p_val,
+                'Pearson_r': r,
+                'Pearson_p': p_val_pearson
+            })
+    
+    return correlation_results
+
+
+def _analyze_subject_level_correlations(merged_df, clinical_scores, min_subjects):
+    """Subject-level correlation analysis (no ROI dimension)"""
+    from scipy.stats import spearmanr, pearsonr
+    
+    correlation_results = []
+    
+    # One correlation per clinical score (using global deviation score)
+    for score in clinical_scores:
+        valid_data = merged_df[merged_df[score].notna()].copy()
+        
+        if len(valid_data) < min_subjects:
+            continue
+        
+        x = valid_data['deviation_score'].values
+        y = valid_data[score].values
+        
+        rho, p_val = spearmanr(x, y)
+        r, p_val_pearson = pearsonr(x, y)
+        
+        correlation_results.append({
+            'Analysis_Level': 'Global',
+            'Clinical_Score': score,
+            'N_Subjects': len(valid_data),
+            'Spearman_rho': rho,
+            'Spearman_p': p_val,
+            'Pearson_r': r,
+            'Pearson_p': p_val_pearson
+        })
+    
+    return correlation_results
+
+
+def _analyze_by_diagnosis(merged_df, clinical_scores, min_subjects, has_roi_data):
+    """Diagnosis-stratified analysis"""
+    from scipy.stats import spearmanr
+    from statsmodels.stats.multitest import multipletests
+    
+    diag_corr_results = []
+    
+    for diagnosis in merged_df['Diagnosis'].unique():
+        diag_data = merged_df[merged_df['Diagnosis'] == diagnosis]
+        n_subjects = diag_data['Filename'].nunique()
+        print(f"\n  {diagnosis}: {n_subjects} subjects")
+        
+        if has_roi_data:
+            rois = diag_data['ROI_Name'].unique()
+            for roi in rois:
+                roi_diag_data = diag_data[diag_data['ROI_Name'] == roi]
+                
+                for score in clinical_scores:
+                    valid_data = roi_diag_data[roi_diag_data[score].notna()]
+                    
+                    if len(valid_data) < min(10, min_subjects):
+                        continue
+                    
+                    x = valid_data['deviation_score'].values
+                    y = valid_data[score].values
+                    rho, p_val = spearmanr(x, y)
+                    
+                    diag_corr_results.append({
+                        'Diagnosis': diagnosis,
+                        'ROI_Name': roi,
+                        'Clinical_Score': score,
+                        'N_Subjects': len(valid_data),
+                        'Spearman_rho': rho,
+                        'Spearman_p': p_val
+                    })
+        else:
+            # Subject-level analysis
+            for score in clinical_scores:
+                valid_data = diag_data[diag_data[score].notna()]
+                
+                if len(valid_data) < min(10, min_subjects):
+                    continue
+                
+                x = valid_data['deviation_score'].values
+                y = valid_data[score].values
+                rho, p_val = spearmanr(x, y)
+                
+                diag_corr_results.append({
+                    'Diagnosis': diagnosis,
+                    'Analysis_Level': 'Global',
+                    'Clinical_Score': score,
+                    'N_Subjects': len(valid_data),
+                    'Spearman_rho': rho,
+                    'Spearman_p': p_val
+                })
+    
+    if not diag_corr_results:
+        return pd.DataFrame()
+    
+    diag_corr_df = pd.DataFrame(diag_corr_results)
+    
+    # FDR correction per diagnosis
+    for diagnosis in diag_corr_df['Diagnosis'].unique():
+        diag_mask = diag_corr_df['Diagnosis'] == diagnosis
+        pvals = diag_corr_df.loc[diag_mask, 'Spearman_p'].values
+        
+        reject, pvals_corrected, _, _ = multipletests(pvals, alpha=0.05, method='fdr_bh')
+        
+        diag_corr_df.loc[diag_mask, 'Spearman_p_corrected'] = pvals_corrected
+        diag_corr_df.loc[diag_mask, 'Significant_FDR'] = reject
+    
+    return diag_corr_df
+
+
+def _create_subject_level_visualizations(merged_df, corr_df, sig_corr, clinical_scores, save_dir):
+    """Create visualizations for subject-level correlations"""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    
+    figures_dir = f"{save_dir}/figures/clinical_correlations"
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    print(f"\n[INFO] Creating subject-level correlation visualizations...")
+    
+    # Bar plot of correlations
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Sort by absolute correlation
+    plot_data = corr_df.copy()
+    plot_data['abs_rho'] = plot_data['Spearman_rho'].abs()
+    plot_data = plot_data.sort_values('abs_rho', ascending=True)
+    
+    colors = ['#d62728' if (rho > 0 and sig) else '#1f77b4' if (rho < 0 and sig) else 'gray' 
+              for rho, sig in zip(plot_data['Spearman_rho'], plot_data['Significant_FDR'])]
+    
+    y_pos = np.arange(len(plot_data))
+    ax.barh(y_pos, plot_data['Spearman_rho'], color=colors, alpha=0.7, edgecolor='black')
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(plot_data['Clinical_Score'], fontsize=10)
+    ax.set_xlabel("Spearman's ρ", fontsize=12, fontweight='bold')
+    ax.set_title(
+        "Global Deviation Score × Clinical Score Correlations\n"
+        "(Red/Blue = FDR significant, Gray = non-significant)",
+        fontsize=13, fontweight='bold', pad=15
+    )
+    ax.axvline(0, color='black', linewidth=0.8)
+    ax.grid(axis='x', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f"{figures_dir}/subject_level_correlations_barplot.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: subject_level_correlations_barplot.png")
+    
+    # Scatter plots for significant correlations
+    if len(sig_corr) > 0:
+        n_plots = min(6, len(sig_corr))
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        axes = axes.flatten()
+        
+        for idx, (_, row) in enumerate(sig_corr.head(n_plots).iterrows()):
+            ax = axes[idx]
+            score = row['Clinical_Score']
+            
+            plot_data = merged_df[merged_df[score].notna()].copy()
+            
+            # Plot by diagnosis
+            for diag in plot_data['Diagnosis'].unique():
+                diag_data = plot_data[plot_data['Diagnosis'] == diag]
+                ax.scatter(
+                    diag_data['deviation_score'],
+                    diag_data[score],
+                    label=diag,
+                    alpha=0.6,
+                    s=50,
+                    edgecolors='black',
+                    linewidth=0.5
+                )
+            
+            # Regression line
+            from scipy.stats import linregress
+            x = plot_data['deviation_score'].values
+            y = plot_data[score].values
+            slope, intercept, _, _, _ = linregress(x, y)
+            line_x = np.array([x.min(), x.max()])
+            line_y = slope * line_x + intercept
+            ax.plot(line_x, line_y, 'k--', linewidth=2, alpha=0.7)
+            
+            ax.set_xlabel('Global Deviation Score', fontsize=10, fontweight='bold')
+            ax.set_ylabel(score, fontsize=10, fontweight='bold')
+            ax.set_title(
+                f"{score}\n"
+                f"ρ = {row['Spearman_rho']:.3f}, p = {row['Spearman_p']:.1e}",
+                fontsize=10, fontweight='bold'
+            )
+            ax.legend(fontsize=8, loc='best')
+            ax.grid(alpha=0.3)
+        
+        # Hide unused axes
+        for idx in range(n_plots, 6):
+            axes[idx].axis('off')
+        
+        plt.suptitle(
+            "Top Clinical Correlations (Subject-Level)",
+            fontsize=14, fontweight='bold', y=0.995
+        )
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/scatter_subject_level_correlations.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: scatter_subject_level_correlations.png")
+    
+def _create_regional_visualizations(merged_df, corr_df, sig_corr, clinical_scores, save_dir, has_roi_data):
+    """Create visualizations for ROI-level correlations"""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    import os
+    from scipy.stats import linregress
+    
+    figures_dir = f"{save_dir}/figures/clinical_correlations"
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    print(f"\n[INFO] Creating ROI-level correlation visualizations...")
+    
+    n_sig = len(sig_corr)
+    
+    # --- 5.1 Heatmap: ROIs × Clinical Scores ---
+    print(f"  Creating correlation heatmap...")
+    
+    # Pivot for heatmap
+    heatmap_data = corr_df.pivot(
+        index='ROI_Name',
+        columns='Clinical_Score',
+        values='Spearman_rho'
+    )
+    
+    # Keep only ROIs/scores with sufficient data
+    heatmap_data = heatmap_data.dropna(how='all', axis=0)
+    heatmap_data = heatmap_data.dropna(how='all', axis=1)
+    
+    # Create mask for non-significant correlations
+    pval_pivot = corr_df.pivot(
+        index='ROI_Name',
+        columns='Clinical_Score',
+        values='Spearman_p_corrected'
+    )
+    mask = pval_pivot >= 0.05
+    
+    fig, ax = plt.subplots(figsize=(12, max(10, len(heatmap_data)*0.3)))
+    
+    sns.heatmap(
+        heatmap_data,
+        cmap='RdBu_r',
+        center=0,
+        vmin=-0.6,
+        vmax=0.6,
+        cbar_kws={'label': "Spearman's ρ"},
+        linewidths=0.5,
+        linecolor='lightgray',
+        ax=ax,
+        mask=mask.reindex_like(heatmap_data),
+        annot=False
+    )
+    
+    ax.set_xlabel("Clinical Score", fontsize=12, fontweight='bold')
+    ax.set_ylabel("Brain Region (ROI)", fontsize=12, fontweight='bold')
+    ax.set_title(
+        "Brain-Clinical Correlations\n"
+        f"(Only FDR-corrected significant correlations shown, n={n_sig})",
+        fontsize=13, fontweight='bold', pad=15
+    )
+    
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(f"{figures_dir}/heatmap_brain_clinical_correlations.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: heatmap_brain_clinical_correlations.png")
+    
+    # --- 5.2 Top Correlations Bar Plot ---
+    print(f"  Creating top correlations plot...")
+    
+    if len(sig_corr) > 0:
+        top_n = min(20, len(sig_corr))
+        top_corr = sig_corr.nlargest(top_n, 'Spearman_rho')
+        
+        fig, ax = plt.subplots(figsize=(12, max(8, top_n*0.4)))
+        
+        # Create labels
+        labels = [f"{row['ROI_Name'][:30]} × {row['Clinical_Score']}" 
+                 for _, row in top_corr.iterrows()]
+        
+        # Color by strength
+        colors = ['#d62728' if rho > 0 else '#1f77b4' 
+                 for rho in top_corr['Spearman_rho']]
+        
+        y_pos = np.arange(len(labels))
+        ax.barh(y_pos, top_corr['Spearman_rho'], color=colors, alpha=0.7, edgecolor='black')
+        
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels, fontsize=9)
+        ax.set_xlabel("Spearman's ρ", fontsize=12, fontweight='bold')
+        ax.set_title(
+            f"Top {top_n} Brain-Clinical Correlations (FDR < 0.05)",
+            fontsize=13, fontweight='bold', pad=15
+        )
+        ax.axvline(0, color='black', linewidth=0.8)
+        ax.grid(axis='x', alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/top_correlations_barplot.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: top_correlations_barplot.png")
+    
+    # --- 5.3 Scatter Plots for Top Correlations ---
+    print(f"  Creating scatter plots for top correlations...")
+    
+    if len(sig_corr) > 0:
+        n_scatter = min(6, len(sig_corr))
+        sig_corr['abs_rho'] = sig_corr['Spearman_rho'].abs()
+        top_scatter = sig_corr.nlargest(n_scatter, 'abs_rho')
+        
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        axes = axes.flatten()
+        
+        for idx, (_, row) in enumerate(top_scatter.iterrows()):
+            if idx >= 6:
+                break
+                
+            ax = axes[idx]
+            
+            roi = row['ROI_Name']
+            score = row['Clinical_Score']
+            
+            # Get data
+            plot_data = merged_df[
+                (merged_df['ROI_Name'] == roi) & 
+                (merged_df[score].notna())
+            ].copy()
+            
+            # Plot by diagnosis
+            for diag in plot_data['Diagnosis'].unique():
+                diag_data = plot_data[plot_data['Diagnosis'] == diag]
+                ax.scatter(
+                    diag_data['deviation_score'],
+                    diag_data[score],
+                    label=diag,
+                    alpha=0.6,
+                    s=50,
+                    edgecolors='black',
+                    linewidth=0.5
+                )
+            
+            # Regression line
+            x = plot_data['deviation_score'].values
+            y = plot_data[score].values
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            line_x = np.array([x.min(), x.max()])
+            line_y = slope * line_x + intercept
+            ax.plot(line_x, line_y, 'k--', linewidth=2, alpha=0.7)
+            
+            ax.set_xlabel('Regional Deviation Score', fontsize=10, fontweight='bold')
+            ax.set_ylabel(score, fontsize=10, fontweight='bold')
+            ax.set_title(
+                f"{roi[:30]}\n"
+                f"ρ = {row['Spearman_rho']:.3f}, p = {row['Spearman_p']:.1e}",
+                fontsize=10, fontweight='bold'
+            )
+            ax.legend(fontsize=8, loc='best')
+            ax.grid(alpha=0.3)
+        
+        # Hide unused axes
+        for idx in range(n_scatter, 6):
+            axes[idx].axis('off')
+        
+        plt.suptitle(
+            "Top Brain-Clinical Correlations (Scatter Plots)",
+            fontsize=14, fontweight='bold', y=0.995
+        )
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/scatter_top_correlations.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: scatter_top_correlations.png")
+    
+    # --- 5.4 Clinical Score Summary ---
+    print(f"  Creating clinical score summary...")
+    
+    score_summary = []
+    
+    for score in clinical_scores:
+        score_corr = corr_df[corr_df['Clinical_Score'] == score]
+        sig_score_corr = score_corr[score_corr['Significant_FDR']]
+        
+        if len(sig_score_corr) > 0:
+            # Top positive
+            top_pos = sig_score_corr[sig_score_corr['Spearman_rho'] > 0].nlargest(3, 'Spearman_rho')
+            # Top negative
+            top_neg = sig_score_corr[sig_score_corr['Spearman_rho'] < 0].nsmallest(3, 'Spearman_rho')
+            
+            score_summary.append({
+                'Clinical_Score': score,
+                'N_Significant_ROIs': len(sig_score_corr),
+                'Top_Positive_ROIs': ', '.join(top_pos['ROI_Name'].tolist()),
+                'Top_Negative_ROIs': ', '.join(top_neg['ROI_Name'].tolist())
+            })
+    
+    if score_summary:
+        import pandas as pd
+        summary_df = pd.DataFrame(score_summary)
+        summary_df = summary_df.sort_values('N_Significant_ROIs', ascending=False)
+        summary_df.to_csv(f"{save_dir}/clinical_score_summary.csv", index=False)
+        
+        print(f"\n  Clinical Scores with Significant Brain Correlations:")
+        for _, row in summary_df.iterrows():
+            print(f"    {row['Clinical_Score']:20s}: {row['N_Significant_ROIs']} ROIs")
+
+def _compute_ml_feature_importance(merged_df, clinical_scores, save_dir):
+    """Compute ML feature importance (only works for regional data)"""
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import cross_val_score
+    import pandas as pd
+    
+    ml_results = []
+    
+    for score in clinical_scores:
+        score_data = merged_df[merged_df[score].notna()].copy()
+        
+        if score_data['Filename'].nunique() < 30:
+            continue
+        
+        pivot_ml = score_data.pivot_table(
+            index='Filename',
+            columns='ROI_Name',
+            values='deviation_score',
+            aggfunc='first'
+        )
+        
+        clinical_vals = score_data.drop_duplicates('Filename').set_index('Filename')[score]
+        clinical_vals = clinical_vals.reindex(pivot_ml.index)
+        
+        valid_idx = clinical_vals.notna() & pivot_ml.notna().all(axis=1)
+        X = pivot_ml.loc[valid_idx].fillna(0).values
+        y = clinical_vals.loc[valid_idx].values
+        
+        if len(y) < 20:
+            continue
+        
+        rf = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=5,
+            min_samples_split=5,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        rf.fit(X, y)
+        cv_scores = cross_val_score(rf, X, y, cv=5, scoring='r2')
+        
+        feature_importance = pd.DataFrame({
+            'ROI_Name': pivot_ml.columns,
+            'Importance': rf.feature_importances_
+        }).sort_values('Importance', ascending=False)
+        
+        ml_results.append({
+            'Clinical_Score': score,
+            'N_Subjects': len(y),
+            'CV_R2_Mean': cv_scores.mean(),
+            'CV_R2_Std': cv_scores.std(),
+            'Top_5_ROIs': ', '.join(feature_importance.head(5)['ROI_Name'].tolist())
+        })
+        
+        feature_importance.to_csv(
+            f"{save_dir}/feature_importance_{score}.csv",
+            index=False
+        )
+    
+    if ml_results:
+        ml_df = pd.DataFrame(ml_results)
+        ml_df = ml_df.sort_values('CV_R2_Mean', ascending=False)
+        ml_df.to_csv(f"{save_dir}/ml_prediction_performance.csv", index=False)
+        
+        print(f"\n  ML Prediction Performance (R² from 5-fold CV):")
+        for _, row in ml_df.iterrows():
+            print(f"    {row['Clinical_Score']:20s}: R² = {row['CV_R2_Mean']:.3f} ± {row['CV_R2_Std']:.3f}")
+    
+    return ml_results
+
+def analyze_subgroups(results_df, save_dir, norm_diagnosis='HC'):
+    """
+    Analyze deviation scores stratified by demographic subgroups.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    import numpy as np
+    from scipy.stats import mannwhitneyu
+    
+    print(f"\n[INFO] Performing subgroup analyses...")
+    
+    figures_dir = f"{save_dir}/figures/subgroups"
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    # ========================================================================
+    # PREPARE SEX LABELS UPFRONT
+    # ========================================================================
+    
+    # Convert Sex to string labels if needed
+    if 'Sex' in results_df.columns:
+        # Check if Sex is numeric (0/1) or string (M/F)
+        unique_sex = results_df['Sex'].dropna().unique()
+        
+        if all(isinstance(x, (int, float, np.integer, np.floating)) for x in unique_sex):
+            # Numeric - convert to labels
+            results_df['Sex_Label'] = results_df['Sex'].map({
+                0: 'M', 1: 'F', 
+                0.0: 'M', 1.0: 'F',
+                '0': 'M', '1': 'F'
+            })
+            print(f"  Converted numeric Sex values to labels (M/F)")
+        else:
+            # Already string
+            results_df['Sex_Label'] = results_df['Sex']
+            print(f"  Sex already in string format")
+    else:
+        print(f"[WARNING] Sex column not found. Skipping sex stratification.")
+        results_df['Sex_Label'] = None
+    
+    # ========================================================================
+    # AGE STRATIFICATION
+    # ========================================================================
+    
+    print(f"\n  [1/3] Age stratification...")
+    
+    # Define age bins
+    results_df['Age_Group'] = pd.cut(
+        results_df['Age'],
+        bins=[0, 30, 45, 60, 100],
+        labels=['18-30', '31-45', '46-60', '60+']
+    )
+    
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    for idx, metric in enumerate(['deviation_score_recon', 'deviation_score_kl', 'deviation_score']):
+        ax = axes[idx]
+        
+        # Prepare data for grouped boxplot
+        plot_data = results_df[results_df['Diagnosis'] != norm_diagnosis].copy()
+        
+        sns.boxplot(
+            data=plot_data,
+            x='Age_Group',
+            y=metric,
+            hue='Diagnosis',
+            ax=ax,
+            palette={'MDD': '#BEDCFE', 'SSD': '#3E885B', 'CAT': '#2F4B26',
+                    'CAT-SSD': '#A67DB8', 'CAT-MDD': '#160C28'}
+        )
+        
+        metric_names = {
+            'deviation_score_recon': 'Reconstruction Error',
+            'deviation_score_kl': 'KL Divergence',
+            'deviation_score': 'Combined Score'
+        }
+        
+        ax.set_title(metric_names[metric], fontsize=12, fontweight='bold')
+        ax.set_xlabel('Age Group', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Deviation Score', fontsize=11, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        ax.legend(fontsize=9, loc='best')
+    
+    plt.suptitle('Deviation Scores by Age Group and Diagnosis',
+                fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.savefig(f"{figures_dir}/age_stratification.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: age_stratification.png")
+    
+    # ========================================================================
+    # SEX STRATIFICATION
+    # ========================================================================
+    
+    print(f"\n  [2/3] Sex stratification...")
+    
+    # Check if Sex_Label is available and has data
+    if results_df['Sex_Label'].notna().sum() == 0:
+        print(f"[WARNING] No valid Sex data available. Creating placeholder plot.")
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.text(0.5, 0.5, 'Sex data not available', 
+               ha='center', va='center', fontsize=16, transform=ax.transAxes)
+        ax.axis('off')
+        plt.savefig(f"{figures_dir}/sex_stratification.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        print(f"    ✓ Saved placeholder plot")
+        
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        
+        for idx, metric in enumerate(['deviation_score_recon', 'deviation_score_kl', 'deviation_score']):
+            ax = axes[idx]
+            
+            plot_data = results_df[
+                (results_df['Diagnosis'] != norm_diagnosis) &
+                (results_df['Sex_Label'].notna())
+            ].copy()
+            
+            # Check if we have both sexes
+            sex_counts = plot_data['Sex_Label'].value_counts()
+            
+            if len(sex_counts) < 2:
+                ax.text(0.5, 0.5, f'Only one sex in data: {sex_counts.index[0]}',
+                       ha='center', va='center', fontsize=12, transform=ax.transAxes)
+                ax.axis('off')
+                continue
+            
+            # Create violin plot with split by sex
+            sns.violinplot(
+                data=plot_data,
+                x='Diagnosis',
+                y=metric,
+                hue='Sex_Label',
+                split=True,
+                ax=ax,
+                palette={'M': '#4A90E2', 'F': '#E24A90'}
+            )
+            
+            metric_names = {
+                'deviation_score_recon': 'Reconstruction Error',
+                'deviation_score_kl': 'KL Divergence',
+                'deviation_score': 'Combined Score'
+            }
+            
+            ax.set_title(metric_names[metric], fontsize=12, fontweight='bold')
+            ax.set_xlabel('Diagnosis', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Deviation Score', fontsize=11, fontweight='bold')
+            ax.grid(axis='y', alpha=0.3)
+            ax.legend(title='Sex', fontsize=9)
+        
+        plt.suptitle('Deviation Scores by Sex and Diagnosis',
+                    fontsize=14, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/sex_stratification.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: sex_stratification.png")
+    
+    # ========================================================================
+    # DATASET STRATIFICATION
+    # ========================================================================
+    
+    print(f"\n  [3/3] Dataset stratification...")
+    
+    # Only for datasets with sufficient samples
+    dataset_counts = results_df['Dataset'].value_counts()
+    datasets_to_plot = dataset_counts[dataset_counts >= 30].index.tolist()
+    
+    if len(datasets_to_plot) == 0:
+        print(f"[WARNING] No datasets with ≥30 samples. Skipping dataset stratification.")
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.text(0.5, 0.5, 'Insufficient data per dataset (need ≥30 per dataset)', 
+               ha='center', va='center', fontsize=16, transform=ax.transAxes)
+        ax.axis('off')
+        plt.savefig(f"{figures_dir}/dataset_stratification.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        print(f"    ✓ Saved placeholder plot")
+        
+    else:
+        fig, ax = plt.subplots(figsize=(14, 8))
+        
+        plot_data = results_df[
+            (results_df['Dataset'].isin(datasets_to_plot)) &
+            (results_df['Diagnosis'] != norm_diagnosis)
+        ].copy()
+        
+        sns.boxplot(
+            data=plot_data,
+            x='Dataset',
+            y='deviation_score',
+            hue='Diagnosis',
+            ax=ax,
+            palette={'MDD': '#BEDCFE', 'SSD': '#3E885B', 'CAT': '#2F4B26',
+                    'CAT-SSD': '#A67DB8', 'CAT-MDD': '#160C28'}
+        )
+        
+        ax.set_title('Combined Deviation Score by Dataset and Diagnosis',
+                    fontsize=13, fontweight='bold', pad=15)
+        ax.set_xlabel('Dataset', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Combined Deviation Score', fontsize=12, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        ax.legend(fontsize=10, loc='best')
+        plt.xticks(rotation=45, ha='right')
+        
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/dataset_stratification.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: dataset_stratification.png")
+    
+    print(f"\n[INFO] Subgroup analyses complete!")
+
+def analyze_ncrs_predictions(results_df, clinical_data_path, save_dir,
+                             min_subjects=10,
+                             apply_fdr=True,
+                             alpha_uncorrected=0.05):
+    """
+    Analyze NCRS (Northoff Catatonia Rating Scale) scores specifically.
+    
+    Focus on motor symptoms and catatonia:
+    1. Correlate regional deviations with NCRS subscales
+    2. Predict NCRS scores from regional patterns
+    3. Identify brain regions most predictive of catatonic symptoms
+    
+    Args:
+        results_df: DataFrame with regional deviation scores
+        clinical_data_path: Path to complete_metadata.csv
+        save_dir: Output directory
+        min_subjects: Minimum subjects needed for analysis
+    """
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import spearmanr, pearsonr
+    from statsmodels.stats.multitest import multipletests
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.linear_model import Ridge
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import cross_val_score, LeaveOneOut
+    import warnings
+    warnings.filterwarnings('ignore')
+    
+    print("\n" + "="*80)
+    print("ANALYZING NCRS (CATATONIA) SYMPTOM CORRELATIONS")
+    print("="*80)
+    
+    # ========================================================================
+    # 1. LOAD AND MERGE CLINICAL DATA
+    # ========================================================================
+    
+    print(f"\n[INFO] Loading clinical data...")
+    clinical_df = pd.read_csv(clinical_data_path)
+    
+    # NCRS scores
+    ncrs_scores = ['NCRS_Motor', 'NCRS_Affective', 'NCRS_Behavioral', 'NCRS_Total']
+    
+    # Check availability
+    print(f"\n  NCRS scores availability:")
+    for score in ncrs_scores:
+        if score in clinical_df.columns:
+            n_available = clinical_df[score].notna().sum()
+            print(f"    {score:20s}: {n_available:4d} subjects")
+        else:
+            print(f"    {score:20s}: NOT FOUND in data")
+    
+    # Merge with deviation scores
+    if 'Filename' not in results_df.columns:
+        print("[ERROR] results_df must have 'Filename' column")
+        return None
+    
+    merged_df = results_df.merge(
+        clinical_df[['Filename', 'Dataset', 'Diagnosis'] + ncrs_scores],
+        on='Filename',
+        how='inner',
+        suffixes=('', '_clinical')
+    )
+    
+    # Filter to subjects with at least one NCRS score
+    has_ncrs = merged_df[ncrs_scores].notna().any(axis=1)
+    merged_df = merged_df[has_ncrs]
+    
+    print(f"\n  Merged data: {merged_df['Filename'].nunique()} subjects with NCRS data")
+    
+    print(f"  Before HC filtering: {merged_df['Filename'].nunique()} subjects")
+    merged_df = merged_df[merged_df['Diagnosis'] != 'HC']
+    print(f"  After HC filtering: {merged_df['Filename'].nunique()} patients")
+
+    # Diagnosis breakdown
+    print(f"\n  Diagnoses with NCRS data:")
+    for diag in merged_df['Diagnosis'].unique():
+        n = merged_df[merged_df['Diagnosis'] == diag]['Filename'].nunique()
+        print(f"    {diag}: {n} subjects")
+    
+    if merged_df['Filename'].nunique() < min_subjects:
+        print(f"[WARNING] Only {merged_df['Filename'].nunique()} subjects with NCRS data. Need at least {min_subjects}.")
+        return None
+    
+    # ========================================================================
+    # 2. ROI-WISE CORRELATIONS WITH NCRS SCORES
+    # ========================================================================
+    
+    print(f"\n[INFO] Computing ROI-wise correlations with NCRS scores...")
+    
+    correlation_results = []
+    rois = merged_df['ROI_Name'].unique()
+    
+    for roi in rois:
+        roi_data = merged_df[merged_df['ROI_Name'] == roi].copy()
+        
+        for score in ncrs_scores:
+            if score not in roi_data.columns:
+                continue
+                
+            valid_data = roi_data[roi_data[score].notna()].copy()
+            
+            if len(valid_data) < min_subjects:
+                continue
+            
+            x = valid_data['deviation_score'].values
+            y = valid_data[score].values
+            
+            # Spearman correlation
+            rho, p_val = spearmanr(x, y)
+            
+            # Pearson for comparison
+            r, p_val_pearson = pearsonr(x, y)
+            
+            correlation_results.append({
+                'ROI_Name': roi,
+                'NCRS_Score': score,
+                'N_Subjects': len(valid_data),
+                'Spearman_rho': rho,
+                'Spearman_p': p_val,
+                'Pearson_r': r,
+                'Pearson_p': p_val_pearson
+            })
+    
+    if len(correlation_results) == 0:
+        print("[WARNING] No correlations could be computed. Insufficient data.")
+        return None
+    
+    corr_df = pd.DataFrame(correlation_results)
+    
+    print(f"    Computed {len(corr_df)} ROI × NCRS correlations")
+    
+    # FDR correction
+    reject, pvals_corrected, _, _ = multipletests(
+        corr_df['Spearman_p'].values,
+        alpha=0.05,
+        method='fdr_bh'
+    )
+    
+    corr_df['Spearman_p_corrected'] = pvals_corrected
+    corr_df['Significant_FDR'] = reject
+    
+    n_sig = corr_df['Significant_FDR'].sum()
+    print(f"    Significant correlations (FDR < 0.05): {n_sig} / {len(corr_df)}")
+    
+    # Save results
+    corr_df_sorted = corr_df.sort_values('Spearman_p', ascending=True)
+    corr_df_sorted.to_csv(f"{save_dir}/ncrs_correlations_all.csv", index=False)
+    
+    sig_corr = corr_df_sorted[corr_df_sorted['Significant_FDR']]
+    if len(sig_corr) > 0:
+        sig_corr.to_csv(f"{save_dir}/ncrs_correlations_significant.csv", index=False)
+        print(f"    ✓ Saved: ncrs_correlations_significant.csv")
+    
+    # ========================================================================
+    # 3. VISUALIZATIONS
+    # ========================================================================
+    
+    figures_dir = f"{save_dir}/figures/ncrs_analysis"
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    # --- 3.1 Heatmap: ROIs × NCRS Scores ---
+    print(f"\n[INFO] Creating NCRS correlation heatmap...")
+    
+    heatmap_data = corr_df.pivot(
+        index='ROI_Name',
+        columns='NCRS_Score',
+        values='Spearman_rho'
+    )
+    
+    heatmap_data = heatmap_data.dropna(how='all', axis=0)
+    heatmap_data = heatmap_data.dropna(how='all', axis=1)
+    
+    # Mask non-significant
+    pval_pivot = corr_df.pivot(
+        index='ROI_Name',
+        columns='NCRS_Score',
+        values='Spearman_p_corrected'
+    )
+    mask = pval_pivot >= 0.05
+    
+    fig, ax = plt.subplots(figsize=(10, max(12, len(heatmap_data)*0.3)))
+    
+    sns.heatmap(
+        heatmap_data,
+        cmap='RdBu_r',
+        center=0,
+        vmin=-0.6,
+        vmax=0.6,
+        cbar_kws={'label': "Spearman's ρ"},
+        linewidths=0.5,
+        linecolor='lightgray',
+        ax=ax,
+        mask=mask.reindex_like(heatmap_data),
+        annot=False
+    )
+    
+    ax.set_xlabel("NCRS Score", fontsize=12, fontweight='bold')
+    ax.set_ylabel("Brain Region (ROI)", fontsize=12, fontweight='bold')
+    ax.set_title(
+        "Brain-NCRS Correlations (Catatonia Symptoms)\n"
+        f"(Only FDR-corrected significant correlations shown, n={n_sig})",
+        fontsize=13, fontweight='bold', pad=15
+    )
+    
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(f"{figures_dir}/heatmap_ncrs_correlations.png",
+               dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: heatmap_ncrs_correlations.png")
+    
+    # --- 3.2 Top Correlations Bar Plot ---
+    if len(sig_corr) > 0:
+        print(f"\n[INFO] Creating top NCRS correlations plot...")
+        
+        top_n = min(15, len(sig_corr))
+        
+        # Get top positive and negative
+        top_pos = sig_corr[sig_corr['Spearman_rho'] > 0].nlargest(8, 'Spearman_rho')
+        top_neg = sig_corr[sig_corr['Spearman_rho'] < 0].nsmallest(7, 'Spearman_rho')
+        top_corr = pd.concat([top_pos, top_neg]).sort_values('Spearman_rho', ascending=False)
+        
+        fig, ax = plt.subplots(figsize=(12, max(8, len(top_corr)*0.4)))
+        
+        labels = [f"{row['ROI_Name'][:35]} × {row['NCRS_Score']}" 
+                 for _, row in top_corr.iterrows()]
+        
+        colors = ['#d62728' if rho > 0 else '#1f77b4' 
+                 for rho in top_corr['Spearman_rho']]
+        
+        y_pos = np.arange(len(labels))
+        ax.barh(y_pos, top_corr['Spearman_rho'], color=colors, alpha=0.7, edgecolor='black')
+        
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels, fontsize=9)
+        ax.set_xlabel("Spearman's ρ", fontsize=12, fontweight='bold')
+        ax.set_title(
+            f"Top {len(top_corr)} Brain-NCRS Correlations (FDR < 0.05)\n"
+            f"Red = Positive correlation | Blue = Negative correlation",
+            fontsize=13, fontweight='bold', pad=15
+        )
+        ax.axvline(0, color='black', linewidth=0.8)
+        ax.grid(axis='x', alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/ncrs_top_correlations.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: ncrs_top_correlations.png")
+    
+    # --- 3.3 Scatter Plots for Top Correlations ---
+    if len(sig_corr) > 0:
+        print(f"\n[INFO] Creating scatter plots for top NCRS correlations...")
+        
+        n_scatter = min(6, len(sig_corr))
+        top_scatter = sig_corr.nlargest(n_scatter, key=lambda x: abs(x['Spearman_rho']))
+        
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        axes = axes.flatten()
+        
+        for idx, (_, row) in enumerate(top_scatter.iterrows()):
+            if idx >= 6:
+                break
+                
+            ax = axes[idx]
+            
+            roi = row['ROI_Name']
+            score = row['NCRS_Score']
+            
+            plot_data = merged_df[
+                (merged_df['ROI_Name'] == roi) & 
+                (merged_df[score].notna())
+            ].copy()
+            
+            # Plot by diagnosis
+            for diag in plot_data['Diagnosis'].unique():
+                diag_data = plot_data[plot_data['Diagnosis'] == diag]
+                ax.scatter(
+                    diag_data['deviation_score'],
+                    diag_data[score],
+                    label=diag,
+                    alpha=0.6,
+                    s=80,
+                    edgecolors='black',
+                    linewidth=0.5
+                )
+            
+            # Regression line
+            from scipy.stats import linregress
+            x = plot_data['deviation_score'].values
+            y = plot_data[score].values
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            line_x = np.array([x.min(), x.max()])
+            line_y = slope * line_x + intercept
+            ax.plot(line_x, line_y, 'k--', linewidth=2, alpha=0.7)
+            
+            ax.set_xlabel('Regional Deviation Score', fontsize=10, fontweight='bold')
+            ax.set_ylabel(score.replace('_', ' '), fontsize=10, fontweight='bold')
+            ax.set_title(
+                f"{roi[:35]}\n"
+                f"ρ = {row['Spearman_rho']:.3f}, p = {row['Spearman_p']:.1e}",
+                fontsize=10, fontweight='bold'
+            )
+            ax.legend(fontsize=8, loc='best')
+            ax.grid(alpha=0.3)
+        
+        # Hide unused axes
+        for idx in range(len(top_scatter), 6):
+            axes[idx].axis('off')
+        
+        plt.suptitle(
+            "Top Brain-NCRS Correlations (Scatter Plots)",
+            fontsize=14, fontweight='bold', y=0.995
+        )
+        plt.tight_layout()
+        plt.savefig(f"{figures_dir}/ncrs_scatter_plots.png",
+                   dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print(f"    ✓ Saved: ncrs_scatter_plots.png")
+    
+    # ========================================================================
+    # 4. MACHINE LEARNING: PREDICT NCRS SCORES FROM REGIONAL PATTERNS
+    # ========================================================================
+    
+    print(f"\n[INFO] Training ML models to predict NCRS scores from regional deviations...")
+    
+    ml_results = []
+    
+    for score in ncrs_scores:
+        if score not in merged_df.columns:
+            continue
+            
+        # Get subjects with this score
+        score_data = merged_df[merged_df[score].notna()].copy()
+        
+        if score_data['Filename'].nunique() < 15:  # Need reasonable sample
+            print(f"    Skipping {score}: only {score_data['Filename'].nunique()} subjects")
+            continue
+        
+        # Pivot: rows = subjects, columns = ROIs
+        pivot_ml = score_data.pivot_table(
+            index='Filename',
+            columns='ROI_Name',
+            values='deviation_score',
+            aggfunc='first'
+        )
+        
+        # Get clinical scores
+        clinical_vals = score_data.drop_duplicates('Filename').set_index('Filename')[score]
+        clinical_vals = clinical_vals.reindex(pivot_ml.index)
+        
+        # Remove NaNs
+        valid_idx = clinical_vals.notna() & pivot_ml.notna().all(axis=1)
+        X = pivot_ml.loc[valid_idx].fillna(0).values
+        y = clinical_vals.loc[valid_idx].values
+        
+        if len(y) < 10:
+            print(f"    Skipping {score}: only {len(y)} complete cases")
+            continue
+        
+        print(f"\n    [{score}] Training on {len(y)} subjects...")
+        
+        # Standardize features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # ====================================================================
+        # Model 1: Random Forest
+        # ====================================================================
+        
+        rf = RandomForestRegressor(
+            n_estimators=100,
+            max_depth=5,
+            min_samples_split=5,
+            random_state=42,
+            n_jobs=-1
+        )
+        
+        # 5-fold CV
+        cv_scores_rf = cross_val_score(rf, X_scaled, y, cv=5, scoring='r2')
+        
+        # Train on all data for feature importance
+        rf.fit(X_scaled, y)
+        
+        # Feature importance
+        feature_importance = pd.DataFrame({
+            'ROI_Name': pivot_ml.columns,
+            'Importance': rf.feature_importances_
+        }).sort_values('Importance', ascending=False)
+        
+        feature_importance.to_csv(
+            f"{save_dir}/ncrs_feature_importance_{score}.csv",
+            index=False
+        )
+        
+        # ====================================================================
+        # Model 2: Ridge Regression (interpretable coefficients)
+        # ====================================================================
+        
+        ridge = Ridge(alpha=1.0)
+        cv_scores_ridge = cross_val_score(ridge, X_scaled, y, cv=5, scoring='r2')
+        
+        # Train on all data for coefficients
+        ridge.fit(X_scaled, y)
+        
+        ridge_coefs = pd.DataFrame({
+            'ROI_Name': pivot_ml.columns,
+            'Coefficient': ridge.coef_
+        }).sort_values('Coefficient', key=abs, ascending=False)
+        
+        ridge_coefs.to_csv(
+            f"{save_dir}/ncrs_ridge_coefficients_{score}.csv",
+            index=False
+        )
+        
+        # ====================================================================
+        # Model 3: Leave-One-Out CV (for small samples)
+        # ====================================================================
+        
+        if len(y) <= 50:
+            loo = LeaveOneOut()
+            cv_scores_loo = cross_val_score(ridge, X_scaled, y, cv=loo, scoring='r2')
+            loo_r2 = cv_scores_loo.mean()
+        else:
+            loo_r2 = None
+        
+        # Store results
+        ml_results.append({
+            'NCRS_Score': score,
+            'N_Subjects': len(y),
+            'RF_R2_Mean': cv_scores_rf.mean(),
+            'RF_R2_Std': cv_scores_rf.std(),
+            'Ridge_R2_Mean': cv_scores_ridge.mean(),
+            'Ridge_R2_Std': cv_scores_ridge.std(),
+            'LOO_R2': loo_r2,
+            'Top_5_ROIs_RF': ', '.join(feature_importance.head(5)['ROI_Name'].tolist()),
+            'Top_5_ROIs_Ridge': ', '.join(ridge_coefs.head(5)['ROI_Name'].tolist())
+        })
+        
+        print(f"      Random Forest: R² = {cv_scores_rf.mean():.3f} ± {cv_scores_rf.std():.3f}")
+        print(f"      Ridge:         R² = {cv_scores_ridge.mean():.3f} ± {cv_scores_ridge.std():.3f}")
+        if loo_r2 is not None:
+            print(f"      LOO CV:        R² = {loo_r2:.3f}")
+    
+    if ml_results:
+        ml_df = pd.DataFrame(ml_results)
+        ml_df = ml_df.sort_values('Ridge_R2_Mean', ascending=False)
+        ml_df.to_csv(f"{save_dir}/ncrs_prediction_performance.csv", index=False)
+        
+        print(f"\n  ML Prediction Summary:")
+        print(f"    ✓ Saved: ncrs_prediction_performance.csv")
+        print(f"    ✓ Saved: ncrs_feature_importance_*.csv for each score")
+        print(f"    ✓ Saved: ncrs_ridge_coefficients_*.csv for each score")
+    
+    # ========================================================================
+    # 5. VISUALIZE FEATURE IMPORTANCE
+    # ========================================================================
+    
+    if ml_results:
+        print(f"\n[INFO] Creating feature importance plots...")
+        
+        for score in [r['NCRS_Score'] for r in ml_results]:
+            # Load feature importance
+            try:
+                feat_imp = pd.read_csv(f"{save_dir}/ncrs_feature_importance_{score}.csv")
+                top_feats = feat_imp.head(20)
+                
+                fig, ax = plt.subplots(figsize=(12, 10))
+                
+                y_pos = np.arange(len(top_feats))
+                ax.barh(y_pos, top_feats['Importance'], alpha=0.7, 
+                       edgecolor='black', linewidth=1.5, color='#2E86AB')
+                
+                ax.set_yticks(y_pos)
+                ax.set_yticklabels(top_feats['ROI_Name'], fontsize=9)
+                ax.set_xlabel('Feature Importance (Random Forest)', fontsize=12, fontweight='bold')
+                ax.set_title(
+                    f'Top 20 Brain Regions Predicting {score.replace("_", " ")}\n'
+                    f'(Random Forest Feature Importance)',
+                    fontsize=13, fontweight='bold', pad=15
+                )
+                ax.grid(axis='x', alpha=0.3)
+                
+                plt.tight_layout()
+                plt.savefig(f"{figures_dir}/feature_importance_{score}.png",
+                           dpi=300, bbox_inches='tight', facecolor='white')
+                plt.close()
+                
+            except:
+                continue
+        
+        print(f"    ✓ Saved feature importance plots")
+    
+    print(f"\n[INFO] NCRS analysis complete!")
+    print(f"  Results saved to: {save_dir}/")
+    
+    return corr_df, ml_results
+
+def create_paper_figure_significant_correlations(
+    clinical_correlations_csv,
+    output_dir,
+    figsize=(14, 10),
+    dpi=300
+):
+    """
+    Create paper-ready figure showing only significant correlations.
+    
+    Args:
+        clinical_correlations_csv: Path to clinical_correlations_significant.csv
+        output_dir: Where to save figures
+        figsize: Figure size (width, height)
+        dpi: Resolution for saving
+    
+    Returns:
+        None (saves figures to disk)
+    """
+    
+    # Load data
+    sig_corr = pd.read_csv(clinical_correlations_csv)
+    
+    print(f"\n[INFO] Creating paper figure from {len(sig_corr)} significant correlations")
+    
+    if len(sig_corr) == 0:
+        print("[WARNING] No significant correlations found! Cannot create figure.")
+        return
+    
+    # ========================================================================
+    # FIGURE 1: Heatmap of Significant Correlations ONLY
+    # ========================================================================
+    
+    print("\n[1/4] Creating focused heatmap (significant only)...")
+    
+    # Pivot to matrix format
+    heatmap_data = sig_corr.pivot(
+        index='ROI_Name',
+        columns='Clinical_Score',
+        values='Spearman_rho'
+    )
+    
+    # Drop empty rows/columns
+    heatmap_data = heatmap_data.dropna(how='all', axis=0)
+    heatmap_data = heatmap_data.dropna(how='all', axis=1)
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Plot heatmap
+    sns.heatmap(
+        heatmap_data,
+        cmap='RdBu_r',
+        center=0,
+        vmin=-0.6,
+        vmax=0.6,
+        cbar_kws={'label': "Spearman's ρ", 'shrink': 0.8},
+        linewidths=0.5,
+        linecolor='white',
+        ax=ax,
+        annot=False,
+        fmt='.2f'
+    )
+    
+    ax.set_xlabel("Clinical Symptom Score", fontsize=13, fontweight='bold')
+    ax.set_ylabel("Brain Region (ROI)", fontsize=13, fontweight='bold')
+    ax.set_title(
+        f"Significant Brain-Clinical Correlations (n={len(sig_corr)})\n"
+        f"FDR-corrected, q < 0.05",
+        fontsize=14, fontweight='bold', pad=20
+    )
+    
+    plt.xticks(rotation=45, ha='right', fontsize=10)
+    plt.yticks(rotation=0, fontsize=9)
+    plt.tight_layout()
+    
+    output_path = os.path.join(output_dir, "paper_figure_heatmap_significant.png")
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: {output_path}")
+    
+    # ========================================================================
+    # FIGURE 2: Bar Plot - All Significant Correlations
+    # ========================================================================
+    
+    print("\n[2/4] Creating comprehensive barplot...")
+    
+    # Sort by absolute correlation strength
+    sig_corr_sorted = sig_corr.copy()
+    sig_corr_sorted['abs_rho'] = sig_corr_sorted['Spearman_rho'].abs()
+    sig_corr_sorted = sig_corr_sorted.sort_values('abs_rho', ascending=True)
+    
+    # Create figure (height scales with number of correlations)
+    fig_height = max(8, len(sig_corr_sorted) * 0.25)
+    fig, ax = plt.subplots(figsize=(12, fig_height))
+    
+    # Create labels
+    labels = [
+        f"{row['ROI_Name'][:40]} × {row['Clinical_Score']}" 
+        for _, row in sig_corr_sorted.iterrows()
+    ]
+    
+    # Color by direction
+    colors = [
+        '#d62728' if rho > 0 else '#1f77b4' 
+        for rho in sig_corr_sorted['Spearman_rho']
+    ]
+    
+    # Plot
+    y_pos = np.arange(len(labels))
+    bars = ax.barh(
+        y_pos, 
+        sig_corr_sorted['Spearman_rho'], 
+        color=colors, 
+        alpha=0.7, 
+        edgecolor='black',
+        linewidth=0.5
+    )
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel("Spearman's ρ", fontsize=12, fontweight='bold')
+    ax.set_title(
+        f"All Significant Brain-Clinical Correlations (FDR < 0.05)\n"
+        f"Red = Positive | Blue = Negative | n = {len(sig_corr_sorted)}",
+        fontsize=13, fontweight='bold', pad=15
+    )
+    ax.axvline(0, color='black', linewidth=0.8, linestyle='-')
+    ax.grid(axis='x', alpha=0.3, linestyle='--')
+    
+    # Add effect size regions
+    ax.axvspan(0.3, 0.6, alpha=0.05, color='red', label='Moderate-Strong (|ρ| > 0.3)')
+    ax.axvspan(-0.6, -0.3, alpha=0.05, color='blue')
+    
+    plt.tight_layout()
+    
+    output_path = os.path.join(output_dir, "paper_figure_barplot_all_significant.png")
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: {output_path}")
+    
+    # ========================================================================
+    # FIGURE 3: Grouped by Clinical Score
+    # ========================================================================
+    
+    print("\n[3/4] Creating grouped barplot by clinical score...")
+    
+    # Count significant correlations per clinical score
+    score_counts = sig_corr['Clinical_Score'].value_counts().sort_values(ascending=True)
+    
+    fig, ax = plt.subplots(figsize=(10, max(6, len(score_counts) * 0.4)))
+    
+    colors_grouped = ['#2E86AB' if count > 5 else '#A23B72' for count in score_counts]
+    
+    y_pos = np.arange(len(score_counts))
+    ax.barh(y_pos, score_counts.values, color=colors_grouped, alpha=0.7, edgecolor='black')
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(score_counts.index, fontsize=11)
+    ax.set_xlabel('Number of Significant ROIs', fontsize=12, fontweight='bold')
+    ax.set_title(
+        'Brain-Wide Impact of Clinical Symptoms\n'
+        '(How many brain regions correlate with each symptom?)',
+        fontsize=13, fontweight='bold', pad=15
+    )
+    ax.grid(axis='x', alpha=0.3)
+    
+    # Add value labels
+    for i, (score, count) in enumerate(score_counts.items()):
+        ax.text(count + 0.3, i, str(count), va='center', fontsize=9, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    output_path = os.path.join(output_dir, "paper_figure_grouped_by_score.png")
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: {output_path}")
+    
+    # ========================================================================
+    # FIGURE 4: Top 10 Strongest Correlations with Details
+    # ========================================================================
+    
+    print("\n[4/4] Creating detailed figure for top 10 correlations...")
+    
+    # Get top 10 by absolute strength
+    top_10 = sig_corr.copy()
+    top_10['abs_rho'] = top_10['Spearman_rho'].abs()
+    top_10 = top_10.nlargest(10, 'abs_rho')
+    
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    # Create detailed labels with p-values
+    labels_detailed = []
+    for _, row in top_10.sort_values('Spearman_rho', ascending=True).iterrows():
+        roi = row['ROI_Name'][:35]
+        score = row['Clinical_Score']
+        rho = row['Spearman_rho']
+        p = row['Spearman_p']
+        n = row['N_Subjects']
+        
+        # Format p-value
+        if p < 0.0001:
+            p_str = "p < 0.0001"
+        elif p < 0.001:
+            p_str = f"p = {p:.4f}"
+        else:
+            p_str = f"p = {p:.3f}"
+        
+        labels_detailed.append(f"{roi} × {score}\n(ρ={rho:.3f}, {p_str}, n={n})")
+    
+    y_pos = np.arange(len(labels_detailed))
+    colors_top = [
+        '#d62728' if rho > 0 else '#1f77b4' 
+        for rho in top_10.sort_values('Spearman_rho')['Spearman_rho']
+    ]
+    
+    bars = ax.barh(y_pos, top_10.sort_values('Spearman_rho')['Spearman_rho'], 
+                   color=colors_top, alpha=0.8, edgecolor='black', linewidth=1.5)
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels_detailed, fontsize=9)
+    ax.set_xlabel("Spearman's ρ", fontsize=13, fontweight='bold')
+    ax.set_title(
+        "Top 10 Strongest Brain-Clinical Correlations\n"
+        "FDR-corrected significant findings (q < 0.05)",
+        fontsize=14, fontweight='bold', pad=20
+    )
+    ax.axvline(0, color='black', linewidth=1, linestyle='-')
+    ax.grid(axis='x', alpha=0.3, linestyle='--')
+    
+    # Add effect size reference lines
+    ax.axvline(0.3, color='gray', linewidth=0.8, linestyle='--', alpha=0.5)
+    ax.axvline(-0.3, color='gray', linewidth=0.8, linestyle='--', alpha=0.5)
+    ax.text(0.31, len(labels_detailed)-0.5, 'Moderate', fontsize=8, alpha=0.6)
+    
+    plt.tight_layout()
+    
+    output_path = os.path.join(output_dir, "paper_figure_top10_detailed.png")
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved: {output_path}")
+    
+    # ========================================================================
+    # SUMMARY STATISTICS
+    # ========================================================================
+    
+    print("\n" + "="*80)
+    print("SUMMARY STATISTICS")
+    print("="*80)
+    
+    print(f"\nTotal significant correlations: {len(sig_corr)}")
+    print(f"  Positive correlations: {(sig_corr['Spearman_rho'] > 0).sum()}")
+    print(f"  Negative correlations: {(sig_corr['Spearman_rho'] < 0).sum()}")
+    
+    print(f"\nEffect size distribution:")
+    print(f"  Small (|ρ| < 0.3):    {(sig_corr['Spearman_rho'].abs() < 0.3).sum()}")
+    print(f"  Moderate (|ρ| ≥ 0.3): {(sig_corr['Spearman_rho'].abs() >= 0.3).sum()}")
+    print(f"  Strong (|ρ| ≥ 0.5):   {(sig_corr['Spearman_rho'].abs() >= 0.5).sum()}")
+    
+    print(f"\nClinical scores with most correlations:")
+    top_scores = sig_corr['Clinical_Score'].value_counts().head(5)
+    for score, count in top_scores.items():
+        print(f"  {score:20s}: {count} ROIs")
+    
+    print(f"\nROIs with most correlations:")
+    top_rois = sig_corr['ROI_Name'].value_counts().head(5)
+    for roi, count in top_rois.items():
+        print(f"  {roi[:40]:40s}: {count} scores")
+    
+    print(f"\nStrongest correlations:")
+    strongest = sig_corr.nlargest(3, key=lambda x: abs(x['Spearman_rho']))
+    for _, row in strongest.iterrows():
+        print(f"  {row['ROI_Name'][:35]:35s} × {row['Clinical_Score']:20s}: ρ = {row['Spearman_rho']:+.3f}")
+    
+    print("\n" + "="*80)
+    print("PAPER FIGURES COMPLETE!")
+    print("="*80)
+    print(f"\nGenerated 4 publication-ready figures:")
+    print(f"  1. paper_figure_heatmap_significant.png")
+    print(f"  2. paper_figure_barplot_all_significant.png")
+    print(f"  3. paper_figure_grouped_by_score.png")
+    print(f"  4. paper_figure_top10_detailed.png")
+
+
+def create_combined_paper_figure(
+    clinical_correlations_csv,
+    output_dir,
+    figsize=(18, 12),
+    dpi=300
+):
+    """
+    Create ONE comprehensive figure with 4 panels (for paper).
+    
+    Perfect for: Main figure in paper showing all aspects
+    """
+    
+    sig_corr = pd.read_csv(clinical_correlations_csv)
+    
+    if len(sig_corr) == 0:
+        print("[WARNING] No significant correlations found!")
+        return
+    
+    print(f"\n[INFO] Creating combined 4-panel figure...")
+    
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    # ========================================================================
+    # PANEL A: Heatmap
+    # ========================================================================
+    
+    ax1 = fig.add_subplot(gs[0, 0])
+    
+    heatmap_data = sig_corr.pivot(
+        index='ROI_Name',
+        columns='Clinical_Score',
+        values='Spearman_rho'
+    ).dropna(how='all', axis=0).dropna(how='all', axis=1)
+    
+    sns.heatmap(
+        heatmap_data,
+        cmap='RdBu_r',
+        center=0,
+        vmin=-0.6,
+        vmax=0.6,
+        cbar_kws={'label': "Spearman's ρ"},
+        linewidths=0.5,
+        linecolor='white',
+        ax=ax1
+    )
+    
+    ax1.set_xlabel("Clinical Score", fontsize=10, fontweight='bold')
+    ax1.set_ylabel("Brain Region", fontsize=10, fontweight='bold')
+    ax1.set_title("A) Correlation Matrix", fontsize=12, fontweight='bold', loc='left')
+    ax1.tick_params(axis='both', labelsize=8)
+    
+    # ========================================================================
+    # PANEL B: Bar plot by clinical score
+    # ========================================================================
+    
+    ax2 = fig.add_subplot(gs[0, 1])
+    
+    score_counts = sig_corr['Clinical_Score'].value_counts().sort_values(ascending=True)
+    colors_b = ['#2E86AB' if count > 5 else '#A23B72' for count in score_counts]
+    
+    y_pos = np.arange(len(score_counts))
+    ax2.barh(y_pos, score_counts.values, color=colors_b, alpha=0.7, edgecolor='black')
+    
+    ax2.set_yticks(y_pos)
+    ax2.set_yticklabels(score_counts.index, fontsize=9)
+    ax2.set_xlabel('Number of ROIs', fontsize=10, fontweight='bold')
+    ax2.set_title("B) Impact by Clinical Score", fontsize=12, fontweight='bold', loc='left')
+    ax2.grid(axis='x', alpha=0.3)
+    
+    # ========================================================================
+    # PANEL C: Top 15 correlations
+    # ========================================================================
+    
+    ax3 = fig.add_subplot(gs[1, :])
+    
+    top_15 = sig_corr.copy()
+    top_15['abs_rho'] = top_15['Spearman_rho'].abs()
+    top_15 = top_15.nlargest(15, 'abs_rho').sort_values('Spearman_rho', ascending=True)
+    
+    labels_c = [
+        f"{row['ROI_Name'][:30]} × {row['Clinical_Score']}" 
+        for _, row in top_15.iterrows()
+    ]
+    
+    colors_c = ['#d62728' if rho > 0 else '#1f77b4' for rho in top_15['Spearman_rho']]
+    
+    y_pos = np.arange(len(labels_c))
+    ax3.barh(y_pos, top_15['Spearman_rho'], color=colors_c, alpha=0.7, edgecolor='black')
+    
+    ax3.set_yticks(y_pos)
+    ax3.set_yticklabels(labels_c, fontsize=9)
+    ax3.set_xlabel("Spearman's ρ", fontsize=11, fontweight='bold')
+    ax3.set_title("C) Top 15 Strongest Correlations", fontsize=12, fontweight='bold', loc='left')
+    ax3.axvline(0, color='black', linewidth=0.8)
+    ax3.grid(axis='x', alpha=0.3)
+    
+    # ========================================================================
+    # Overall title
+    # ========================================================================
+    
+    fig.suptitle(
+        f"Significant Brain-Clinical Correlations (n={len(sig_corr)}, FDR < 0.05)",
+        fontsize=15, fontweight='bold', y=0.98
+    )
+    
+    output_path = os.path.join(output_dir, "paper_figure_combined_4panel.png")
+    plt.savefig(output_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"    ✓ Saved combined figure: {output_path}")

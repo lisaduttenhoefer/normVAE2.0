@@ -1816,6 +1816,17 @@ def load_harmonized_data(harmonized_hc_path, harmonized_patients_path, hc_metada
     log_and_print(f"  Path: {normalized_csv_path}")
     log_and_print(f"  Shape: {combined_data.shape}")
     
+    # ========== NEW: Save test metadata for testing script ==========
+    data_dir = os.path.join(save_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    
+    test_metadata_path = os.path.join(data_dir, "test_metadata_harmonized.csv")
+    test_overview.to_csv(test_metadata_path, index=False)
+    log_and_print(f"\n[SAVED TEST METADATA]")
+    log_and_print(f"  Path: {test_metadata_path}")
+    log_and_print(f"  Shape: {test_overview.shape}")
+    log_and_print(f"  Contains: {len(test_hc_overview)} HC + {len(test_pat_overview)} patients")
+    
     log_and_print("\n" + "="*80)
     log_and_print(f"✓ DATA LOADING COMPLETE")
     log_and_print(f"  Train: {len(train_overview)} HC subjects")
@@ -1823,5 +1834,4 @@ def load_harmonized_data(harmonized_hc_path, harmonized_patients_path, hc_metada
     log_and_print(f"  Features: {len(roi_cols)} ROIs (normalized)")
     log_and_print("="*80 + "\n")
     
-    # Return values matching expected output
     return combined_data, train_overview, test_overview, normalized_csv_path

@@ -29,7 +29,7 @@ export PYTHONUNBUFFERED=1
 # Alles nur ins training_output log
 python -u src/RUN_training_CondVAE.py \
     --atlas_name aparc_dk40 neuromorphometrics \
-    --volume_type G T Vgm \
+    --volume_type T \
     --exclude_datasets NU \
     --num_epochs 300 \
     --n_bootstraps 50 \

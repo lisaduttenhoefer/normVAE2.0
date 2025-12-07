@@ -30,6 +30,7 @@ export PYTHONUNBUFFERED=1
 python -u src/RUN_training_normVAE2.py \
     --atlas_name neuromorphometrics aparc_dk40 \
     --volume_type Vgm T G \
+    --use_harmonized \
     --kl_warmup_epochs 100 \
     --kldiv_weight 0.5 \
     --latent_dim 40 \
